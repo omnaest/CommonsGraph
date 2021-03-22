@@ -22,17 +22,20 @@ import java.util.stream.Stream;
 import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Nodes;
+import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
 import org.omnaest.utils.graph.internal.index.GraphIndex;
 
 public class NodesImpl implements Nodes
 {
-    private final Set<NodeIdentity> nodeIdentities;
-    private final GraphIndex        graphIndex;
+    private final Set<NodeIdentity>   nodeIdentities;
+    private final GraphIndex          graphIndex;
+    private final NodeResolverSupport nodeResolverSupport;
 
-    public NodesImpl(Set<NodeIdentity> nodeIdentities, GraphIndex graphIndex)
+    public NodesImpl(Set<NodeIdentity> nodeIdentities, GraphIndex graphIndex, NodeResolverSupport nodeResolverSupport)
     {
         this.nodeIdentities = nodeIdentities;
         this.graphIndex = graphIndex;
+        this.nodeResolverSupport = nodeResolverSupport;
     }
 
     @Override
@@ -44,7 +47,7 @@ public class NodesImpl implements Nodes
 
     private NodeImpl wrapIntoNode(NodeIdentity nodeIdentity)
     {
-        return new NodeImpl(nodeIdentity, this.graphIndex);
+        return new NodeImpl(nodeIdentity, this.graphIndex, this.nodeResolverSupport);
     }
 
     @Override
@@ -53,5 +56,15 @@ public class NodesImpl implements Nodes
         return Optional.ofNullable(nodeIdentity)
                        .filter(this.nodeIdentities::contains)
                        .map(this::wrapIntoNode);
+    }
+
+    @Override
+    public Nodes resolveAll()
+    {
+        if (this.nodeResolverSupport.isLazyLoadingActive())
+        {
+            this.nodeResolverSupport.resolve(this.nodeIdentities);
+        }
+        return this;
     }
 }

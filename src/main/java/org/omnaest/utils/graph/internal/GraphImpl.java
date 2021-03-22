@@ -15,26 +15,34 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.internal;
 
+import java.util.Collection;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.graph.domain.Graph;
+import org.omnaest.utils.graph.domain.GraphResolver;
 import org.omnaest.utils.graph.domain.GraphRouter;
 import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.Nodes;
+import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
 import org.omnaest.utils.graph.internal.index.GraphIndex;
 import org.omnaest.utils.graph.internal.node.NodeImpl;
+import org.omnaest.utils.graph.internal.node.NodesImpl;
+import org.omnaest.utils.graph.internal.resolver.GraphResolverImpl;
 import org.omnaest.utils.graph.internal.router.GraphRouterImpl;
-import org.omnaest.utils.json.AbstractJSONSerializable;
 
-public class GraphImpl extends AbstractJSONSerializable implements Graph
+public class GraphImpl implements Graph
 {
-    private GraphIndex graphIndex;
+    private GraphIndex          graphIndex;
+    private NodeResolverSupport nodeResolverSupport;
 
-    public GraphImpl(GraphIndex graphIndex)
+    public GraphImpl(GraphIndex graphIndex, NodeResolverSupport nodeResolverSupport)
     {
         super();
         this.graphIndex = graphIndex;
+        this.nodeResolverSupport = nodeResolverSupport;
     }
 
     @Override
@@ -47,7 +55,7 @@ public class GraphImpl extends AbstractJSONSerializable implements Graph
 
     private Node wrapIntoNode(NodeIdentity nodeIdentity)
     {
-        return new NodeImpl(nodeIdentity, this.graphIndex);
+        return new NodeImpl(nodeIdentity, this.graphIndex, this.nodeResolverSupport);
     }
 
     @Override
@@ -69,6 +77,27 @@ public class GraphImpl extends AbstractJSONSerializable implements Graph
     {
         return this.graphIndex.getNodes()
                               .size();
+    }
+
+    @Override
+    public Nodes findNodesByIds(Collection<NodeIdentity> nodeIdentities)
+    {
+        return new NodesImpl(nodeIdentities.stream()
+                                           .filter(this.graphIndex::containsNode)
+                                           .collect(Collectors.toSet()),
+                             this.graphIndex, this.nodeResolverSupport);
+    }
+
+    @Override
+    public GraphResolver resolver()
+    {
+        return new GraphResolverImpl(this.graphIndex, this.nodeResolverSupport);
+    }
+
+    @Override
+    public String toString()
+    {
+        return this.graphIndex.toString();
     }
 
 }

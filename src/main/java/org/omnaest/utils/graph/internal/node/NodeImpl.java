@@ -18,17 +18,20 @@ package org.omnaest.utils.graph.internal.node;
 import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Nodes;
+import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
 import org.omnaest.utils.graph.internal.index.GraphIndex;
 
 public class NodeImpl implements Node
 {
-    private final NodeIdentity nodeIdentity;
-    private final GraphIndex   graphIndex;
+    private final NodeIdentity  nodeIdentity;
+    private final GraphIndex    graphIndex;
+    private NodeResolverSupport nodeResolverSupport;
 
-    public NodeImpl(NodeIdentity nodeIdentity, GraphIndex graphIndex)
+    public NodeImpl(NodeIdentity nodeIdentity, GraphIndex graphIndex, NodeResolverSupport nodeResolverSupport)
     {
         this.nodeIdentity = nodeIdentity;
         this.graphIndex = graphIndex;
+        this.nodeResolverSupport = nodeResolverSupport;
     }
 
     @Override
@@ -40,13 +43,13 @@ public class NodeImpl implements Node
     @Override
     public Nodes getOutgoingNodes()
     {
-        return new NodesImpl(this.graphIndex.getOutgoingNodes(this.nodeIdentity), this.graphIndex);
+        return new NodesImpl(this.graphIndex.getOutgoingNodes(this.nodeIdentity), this.graphIndex, this.nodeResolverSupport);
     }
 
     @Override
     public Nodes getIncomingNodes()
     {
-        return new NodesImpl(this.graphIndex.getIncomingNodes(this.nodeIdentity), this.graphIndex);
+        return new NodesImpl(this.graphIndex.getIncomingNodes(this.nodeIdentity), this.graphIndex, this.nodeResolverSupport);
     }
 
     @Override
@@ -70,6 +73,19 @@ public class NodeImpl implements Node
         {
             return false;
         }
+    }
+
+    @Override
+    public Node resolve()
+    {
+        this.nodeResolverSupport.resolve(this.nodeIdentity);
+        return this;
+    }
+
+    @Override
+    public String toString()
+    {
+        return this.nodeIdentity.toString();
     }
 
 }

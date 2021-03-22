@@ -22,6 +22,9 @@ import java.util.function.Supplier;
 
 import org.omnaest.utils.ListUtils;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 /**
  * Identity of a {@link Node} which can be used for {@link #equals(Object)} and {@link #hashCode()} operations.
  * 
@@ -29,6 +32,7 @@ import org.omnaest.utils.ListUtils;
  */
 public class NodeIdentity implements Supplier<List<String>>
 {
+    @JsonProperty
     private List<String> ids;
 
     protected NodeIdentity(List<String> ids)
@@ -98,6 +102,7 @@ public class NodeIdentity implements Supplier<List<String>>
      * Returns all id tokens
      */
     @Override
+    @JsonIgnore
     public List<String> get()
     {
         return this.ids;
@@ -108,6 +113,7 @@ public class NodeIdentity implements Supplier<List<String>>
      * 
      * @return
      */
+    @JsonIgnore
     public String getPrimaryId()
     {
         return ListUtils.first(this.ids);

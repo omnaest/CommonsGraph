@@ -29,6 +29,15 @@ public interface GraphRouter
         public Routes findAllOutgoingRoutesBetween(NodeIdentity from, NodeIdentity to);
 
         public Routes findAllIncomingRoutesBetween(NodeIdentity from, NodeIdentity to);
+
+        /**
+         * Disables the lazy loading of {@link Node}s and relies only of already resolved {@link Node}s
+         * 
+         * @return
+         */
+        public RoutingStrategy withDisabledNodeResolving();
+
+        public RoutingStrategy withDisabledNodeResolving(boolean disabledNodeResolving);
     }
 
     public static interface Routes extends Streamable<Route>
@@ -42,6 +51,10 @@ public interface GraphRouter
          * @return
          */
         public Optional<Route> first();
+
+        public boolean hasNoRoutes();
+
+        public boolean hasRoutes();
 
     }
 

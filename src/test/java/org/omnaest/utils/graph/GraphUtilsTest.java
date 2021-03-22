@@ -20,11 +20,13 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 import org.junit.Test;
 import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.graph.domain.Graph;
+import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.graph.domain.GraphRouter;
 import org.omnaest.utils.graph.domain.GraphRouter.Routes;
 import org.omnaest.utils.graph.domain.Node;
@@ -105,6 +107,68 @@ public class GraphUtilsTest
                                                                    .stream()
                                                                    .map(NodeIdentity::getPrimaryId)
                                                                    .collect(Collectors.toList()));
+        }
+        {
+            Routes routes = router.withBreadthFirst()
+                                  .findAllIncomingRoutesBetween(childNode2, rootNode);
+            assertEquals(1, routes.size());
+            assertEquals(Arrays.asList("1.1.2", "1.1", "1"), routes.first()
+                                                                   .get()
+                                                                   .toNodeIdentities()
+                                                                   .stream()
+                                                                   .map(NodeIdentity::getPrimaryId)
+                                                                   .collect(Collectors.toList()));
+        }
+    }
+
+    @Test
+    public void testRouterWithNodeResolver() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        Graph graph = GraphUtils.builder()
+                                .addNode(rootNode)
+                                .withSingleNodeResolver(node ->
+                                {
+                                    if (rootNode.equals(node))
+                                    {
+                                        return Arrays.asList(intermediateNode1, intermediateNode2)
+                                                     .stream()
+                                                     .map(intermediateNode -> EdgeIdentity.of(rootNode, intermediateNode))
+                                                     .collect(Collectors.toSet());
+                                    }
+                                    else if (intermediateNode1.equals(node))
+                                    {
+                                        return Arrays.asList(childNode1, childNode2)
+                                                     .stream()
+                                                     .map(childNode -> EdgeIdentity.of(intermediateNode1, childNode))
+                                                     .collect(Collectors.toSet());
+                                    }
+                                    else
+                                    {
+                                        return Collections.emptySet();
+                                    }
+                                })
+                                .build();
+
+        assertEquals(1, graph.size());
+
+        GraphRouter router = graph.newRouter();
+
+        {
+            Routes routes = router.withBreadthFirst()
+                                  .findAllOutgoingRoutesBetween(rootNode, childNode1);
+            assertEquals(1, routes.size());
+            assertEquals(Arrays.asList("1", "1.1", "1.1.1"), routes.first()
+                                                                   .get()
+                                                                   .toNodeIdentities()
+                                                                   .stream()
+                                                                   .map(NodeIdentity::getPrimaryId)
+                                                                   .collect(Collectors.toList()));
+            assertEquals(5, graph.size());
         }
         {
             Routes routes = router.withBreadthFirst()

@@ -15,6 +15,13 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.internal;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.graph.domain.Graph;
 import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.NodeIdentity;
@@ -22,7 +29,62 @@ import org.omnaest.utils.graph.internal.index.GraphIndex;
 
 public class GraphBuilderImpl implements GraphBuilder
 {
-    private GraphIndex graphIndex = new GraphIndex();
+    private GraphIndex          graphIndex          = new GraphIndex();
+    private NodeResolverSupport nodeResolverSupport = new NodeResolverSupport(this.graphIndex);
+
+    public static class NodeResolverSupport
+    {
+        private List<MultiNodeResolver> nodeResolvers = new ArrayList<>();
+        private GraphIndex              graphIndex;
+
+        public NodeResolverSupport(GraphIndex graphIndex)
+        {
+            this.graphIndex = graphIndex;
+        }
+
+        public NodeResolverSupport add(SingleNodeResolver nodeResolver)
+        {
+            if (nodeResolver != null)
+            {
+                this.add(nodeResolver.asMultiNodeResolver());
+            }
+            return this;
+        }
+
+        public NodeResolverSupport add(MultiNodeResolver nodeResolver)
+        {
+            if (nodeResolver != null)
+            {
+                this.nodeResolvers.add(nodeResolver);
+            }
+            return this;
+        }
+
+        public NodeResolverSupport resolve(Set<NodeIdentity> nodeIdentities)
+        {
+            if (nodeIdentities != null)
+            {
+                Set<NodeIdentity> unresolvedNodes = nodeIdentities.stream()
+                                                                  .filter(this.graphIndex::isUnresolvedNode)
+                                                                  .collect(Collectors.toSet());
+                this.nodeResolvers.forEach(nodeResolver -> nodeResolver.apply(unresolvedNodes)
+                                                                       .forEach(this.graphIndex::addEdge));
+                this.graphIndex.markNodesAsResolved(unresolvedNodes);
+            }
+            return this;
+        }
+
+        public boolean isLazyLoadingActive()
+        {
+            return !this.nodeResolvers.isEmpty();
+        }
+
+        public NodeResolverSupport resolve(NodeIdentity nodeIdentity)
+        {
+            return this.resolve(SetUtils.toSet(nodeIdentity));
+        }
+
+    }
 
     @Override
     public GraphBuilder addNode(NodeIdentity nodeIdentity)
@@ -32,9 +94,23 @@ public class GraphBuilderImpl implements GraphBuilder
     }
 
     @Override
+    public GraphBuilder addNodes(Collection<NodeIdentity> nodeIdentities)
+    {
+        this.graphIndex.addNodes(nodeIdentities);
+        return this;
+    }
+
+    @Override
     public GraphBuilder addEdge(NodeIdentity from, NodeIdentity to)
     {
         this.graphIndex.addEdge(from, to);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder addEdge(EdgeIdentity edgeIdentity)
+    {
+        this.graphIndex.addEdge(edgeIdentity);
         return this;
     }
 
@@ -48,6 +124,21 @@ public class GraphBuilderImpl implements GraphBuilder
     @Override
     public Graph build()
     {
-        return new GraphImpl(this.graphIndex);
+        return new GraphImpl(this.graphIndex, this.nodeResolverSupport);
     }
+
+    @Override
+    public GraphBuilder withSingleNodeResolver(SingleNodeResolver nodeResolver)
+    {
+        this.nodeResolverSupport.add(nodeResolver);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder withMultiNodeResolver(MultiNodeResolver nodeResolver)
+    {
+        this.nodeResolverSupport.add(nodeResolver);
+        return this;
+    }
+
 }

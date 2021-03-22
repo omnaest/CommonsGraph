@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.json.AbstractJSONSerializable;
 
@@ -33,15 +34,6 @@ public class GraphEdgesIndex extends AbstractJSONSerializable
     @JsonProperty
     private Map<NodeIdentity, Set<NodeIdentity>> outgoingToIncoming = new ConcurrentHashMap<>();
 
-    public void addEdge(NodeIdentity from, NodeIdentity to)
-    {
-        this.incomingToOutgoing.computeIfAbsent(from, f -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
-                               .add(to);
-        this.outgoingToIncoming.computeIfAbsent(to, f -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
-                               .add(from);
-
-    }
-
     public Set<NodeIdentity> getIncomingNodes(NodeIdentity nodeIdentity)
     {
         return this.outgoingToIncoming.getOrDefault(nodeIdentity, Collections.emptySet());
@@ -50,6 +42,26 @@ public class GraphEdgesIndex extends AbstractJSONSerializable
     public Set<NodeIdentity> getOutgoingNodes(NodeIdentity nodeIdentity)
     {
         return this.incomingToOutgoing.getOrDefault(nodeIdentity, Collections.emptySet());
+    }
+
+    public GraphEdgesIndex addEdge(EdgeIdentity edge)
+    {
+        if (edge != null)
+        {
+            NodeIdentity from = edge.getFrom();
+            NodeIdentity to = edge.getTo();
+            if (from != null)
+            {
+                this.outgoingToIncoming.computeIfAbsent(to, f -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
+                                       .add(from);
+            }
+            if (to != null)
+            {
+                this.incomingToOutgoing.computeIfAbsent(from, f -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
+                                       .add(to);
+            }
+        }
+        return this;
     }
 
 }

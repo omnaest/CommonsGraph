@@ -17,9 +17,17 @@ package org.omnaest.utils.graph.domain;
 
 import java.util.Optional;
 
+import org.omnaest.utils.graph.domain.GraphBuilder.MultiNodeResolver;
 import org.omnaest.utils.stream.Streamable;
 
 public interface Nodes extends Streamable<Node>
 {
     public Optional<Node> findById(NodeIdentity nodeIdentity);
+
+    /**
+     * Similar to {@link Node#resolve()} but executing as {@link MultiNodeResolver}
+     * 
+     * @return
+     */
+    public Nodes resolveAll();
 }

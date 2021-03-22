@@ -15,6 +15,8 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.domain;
 
+import org.omnaest.utils.graph.domain.GraphBuilder.NodeResolver;
+
 /**
  * @author omnaest
  */
@@ -25,4 +27,11 @@ public interface Node
     public Nodes getOutgoingNodes();
 
     public Nodes getIncomingNodes();
+
+    /**
+     * Resolves all lazy connections to this {@link Node} using the defined {@link NodeResolver}s of the {@link Graph}
+     * 
+     * @return
+     */
+    public Node resolve();
 }

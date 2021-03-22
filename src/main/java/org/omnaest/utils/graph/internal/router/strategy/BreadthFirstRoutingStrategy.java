@@ -37,7 +37,8 @@ import org.omnaest.utils.graph.internal.router.route.RouteImpl;
 
 public class BreadthFirstRoutingStrategy implements RoutingStrategy
 {
-    private Graph graph;
+    private Graph   graph;
+    private boolean enableNodeResolving = true;
 
     public BreadthFirstRoutingStrategy(Graph graph)
     {
@@ -85,6 +86,19 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     }
 
     @Override
+    public RoutingStrategy withDisabledNodeResolving()
+    {
+        return this.withDisabledNodeResolving(true);
+    }
+
+    @Override
+    public RoutingStrategy withDisabledNodeResolving(boolean disabledNodeResolving)
+    {
+        this.enableNodeResolving = !disabledNodeResolving;
+        return this;
+    }
+
+    @Override
     public Routes findAllIncomingRoutesBetween(NodeIdentity from, NodeIdentity to)
     {
         Function<Node, Stream<Node>> forwardFunction = node -> node.getIncomingNodes()
@@ -103,45 +117,28 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     public Routes findAllRoutesBetween(NodeIdentity from, NodeIdentity to, Function<Node, Stream<Node>> forwardFunction)
     {
         Optional<Node> startNode = this.graph.findNodeById(from);
-        Optional<Node> targetNode = this.graph.findNodeById(to);
-
         List<Route> routes = new ArrayList<>();
-        if (startNode.isPresent() && targetNode.isPresent())
+        if (startNode.isPresent())
         {
-            List<NodeAndPath> currentNodes = new ArrayList<>();
-            currentNodes.add(NodeAndPath.of(startNode.get()));
+            List<NodeAndPath> currentNodeAndPaths = new ArrayList<>();
+            currentNodeAndPaths.add(NodeAndPath.of(startNode.get()));
 
-            if (targetNode.get()
-                          .equals(startNode.get()))
+            if (this.graph.findNodeById(to)
+                          .map(node -> node.equals(startNode.get()))
+                          .orElse(false))
             {
                 routes.add(new RouteImpl(Arrays.asList(startNode.get()
                                                                 .getIdentity()),
                                          this.graph));
             }
             Set<NodeIdentity> visitedNodes = new HashSet<>();
-            while (!currentNodes.isEmpty())
+            while (!currentNodeAndPaths.isEmpty())
             {
-                visitedNodes.addAll(currentNodes.stream()
-                                                .map(NodeAndPath::getNode)
-                                                .map(Node::getIdentity)
-                                                .collect(Collectors.toList()));
-                currentNodes = currentNodes.stream()
-                                           .flatMap(nodeAndPath -> forwardFunction.apply(nodeAndPath.getNode())
-                                                                                  .filter(node -> !visitedNodes.contains(node.getIdentity()))
-                                                                                  .map(nextNode -> nodeAndPath.append(nextNode)))
-                                           .collect(Collectors.toList());
-
-                List<NodeAndPath> matchingNodes = currentNodes.stream()
-                                                              .filter(nap -> nap.getNode()
-                                                                                .equals(targetNode.get()))
-                                                              .collect(Collectors.toList());
-                routes.addAll(matchingNodes.stream()
-                                           .map(nodeAndPath -> new RouteImpl(nodeAndPath.getFullPath()
-                                                                                        .stream()
-                                                                                        .map(Node::getIdentity)
-                                                                                        .collect(Collectors.toList()),
-                                                                             this.graph))
-                                           .collect(Collectors.toList()));
+                Set<NodeIdentity> currentNodes = this.determineNodesFrom(currentNodeAndPaths);
+                visitedNodes.addAll(currentNodes);
+                this.resolveUnresolvedNodesIfEnabled(currentNodes);
+                currentNodeAndPaths = this.determineNextNodes(forwardFunction, currentNodeAndPaths, visitedNodes);
+                routes.addAll(this.determineRoutesByMatchingNodes(this.graph.findNodeById(to), currentNodeAndPaths));
             }
 
         }
@@ -165,6 +162,76 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             {
                 return ListUtils.optionalFirst(routes);
             }
+
+            @Override
+            public boolean hasNoRoutes()
+            {
+                return routes.isEmpty();
+            }
+
+            @Override
+            public boolean hasRoutes()
+            {
+                return !routes.isEmpty();
+            }
+
         };
+    }
+
+    private void resolveUnresolvedNodesIfEnabled(Set<NodeIdentity> currentNodes)
+    {
+        if (this.enableNodeResolving)
+        {
+            this.graph.findNodesByIds(currentNodes)
+                      .resolveAll();
+        }
+    }
+
+    private Set<NodeIdentity> determineNodesFrom(List<NodeAndPath> currentNodes)
+    {
+        return currentNodes.stream()
+                           .map(NodeAndPath::getNode)
+                           .map(Node::getIdentity)
+                           .collect(Collectors.toSet());
+    }
+
+    private List<Route> determineRoutesByMatchingNodes(Optional<Node> targetNode, List<NodeAndPath> currentNodes)
+    {
+        if (targetNode.isPresent())
+        {
+            return this.wrapMatchingNodeAndPathsIntoRoutes(this.determineMatchingNodes(targetNode, currentNodes));
+        }
+        else
+        {
+            return Collections.emptyList();
+        }
+    }
+
+    private List<Route> wrapMatchingNodeAndPathsIntoRoutes(List<NodeAndPath> matchingNodes)
+    {
+        return matchingNodes.stream()
+                            .map(nodeAndPath -> new RouteImpl(nodeAndPath.getFullPath()
+                                                                         .stream()
+                                                                         .map(Node::getIdentity)
+                                                                         .collect(Collectors.toList()),
+                                                              this.graph))
+                            .collect(Collectors.toList());
+    }
+
+    private List<NodeAndPath> determineMatchingNodes(Optional<Node> targetNode, List<NodeAndPath> currentNodes)
+    {
+        return currentNodes.stream()
+                           .filter(nodeAndPath -> nodeAndPath.getNode()
+                                                             .equals(targetNode.get()))
+                           .collect(Collectors.toList());
+    }
+
+    private List<NodeAndPath> determineNextNodes(Function<Node, Stream<Node>> forwardFunction, List<NodeAndPath> currentNodes, Set<NodeIdentity> visitedNodes)
+    {
+        return currentNodes.stream()
+                           .flatMap(nodeAndPath -> forwardFunction.apply(nodeAndPath.getNode())
+                                                                  .filter(node -> !visitedNodes.contains(node.getIdentity()))
+                                                                  .map(nodeAndPath::append))
+                           .collect(Collectors.toList());
     }
 }

@@ -60,6 +60,16 @@ public class GraphBuilderImpl implements GraphBuilder
             return this;
         }
 
+        public NodeResolverSupport addBidirectional(SingleNodeResolver nodeResolver)
+        {
+            if (nodeResolver != null)
+            {
+                this.add(nodeResolver.asMultiNodeResolver()
+                                     .asBidirectionalMultiNodeResolver());
+            }
+            return this;
+        }
+
         public NodeResolverSupport resolve(Set<NodeIdentity> nodeIdentities)
         {
             if (nodeIdentities != null)
@@ -131,6 +141,13 @@ public class GraphBuilderImpl implements GraphBuilder
     public GraphBuilder withSingleNodeResolver(SingleNodeResolver nodeResolver)
     {
         this.nodeResolverSupport.add(nodeResolver);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder withBidirectionalSingleNodeResolver(SingleNodeResolver nodeResolver)
+    {
+        this.nodeResolverSupport.addBidirectional(nodeResolver);
         return this;
     }
 

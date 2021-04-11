@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.omnaest.utils.SetUtils;
 
@@ -67,6 +68,8 @@ public interface GraphBuilder
 
     public GraphBuilder withSingleNodeResolver(SingleNodeResolver nodeResolver);
 
+    public GraphBuilder withBidirectionalSingleNodeResolver(SingleNodeResolver nodeResolver);
+
     public GraphBuilder withMultiNodeResolver(MultiNodeResolver nodeResolver);
 
     /**
@@ -107,6 +110,22 @@ public interface GraphBuilder
         {
             return nodeIdentity -> this.apply(SetUtils.toSet(nodeIdentity));
         }
+
+        /**
+         * Returns a wrapping {@link MultiNodeResolver} which duplicates all the current {@link EdgeIdentity}s into their own and their
+         * {@link EdgeIdentity#inverse()} edges
+         * 
+         * @return
+         */
+        public default MultiNodeResolver asBidirectionalMultiNodeResolver()
+        {
+            return ids -> Optional.ofNullable(ids)
+                                  .map(this::apply)
+                                  .map(forwardEdges -> Stream.concat(forwardEdges.stream(), forwardEdges.stream()
+                                                                                                        .map(EdgeIdentity::inverse)))
+                                  .map(edges -> edges.collect(Collectors.toSet()))
+                                  .orElse(Collections.emptySet());
+        }
     }
 
     public static class EdgeIdentity
@@ -129,6 +148,16 @@ public interface GraphBuilder
         public NodeIdentity getTo()
         {
             return to;
+        }
+
+        /**
+         * Returns a new {@link EdgeIdentity} with {@link #getFrom()} and {@link #getTo()} switched.
+         * 
+         * @return
+         */
+        public EdgeIdentity inverse()
+        {
+            return EdgeIdentity.of(to, from);
         }
 
         public static EdgeIdentity of(NodeIdentity from, NodeIdentity to)

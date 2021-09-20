@@ -21,9 +21,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
+import org.omnaest.utils.graph.domain.GraphBuilder.RepositoryProvider;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.json.AbstractJSONSerializable;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class GraphEdgesIndex extends AbstractJSONSerializable
@@ -33,6 +35,19 @@ public class GraphEdgesIndex extends AbstractJSONSerializable
 
     @JsonProperty
     private Map<NodeIdentity, Set<NodeIdentity>> outgoingToIncoming = new ConcurrentHashMap<>();
+
+    public GraphEdgesIndex(RepositoryProvider repositoryProvider)
+    {
+        super();
+        this.incomingToOutgoing = repositoryProvider.createMap("incomingToOutgoing");
+        this.outgoingToIncoming = repositoryProvider.createMap("outgoingToIncoming");
+    }
+
+    @JsonCreator
+    protected GraphEdgesIndex()
+    {
+        this((name, keyType, valueType) -> new ConcurrentHashMap<>());
+    }
 
     public Set<NodeIdentity> getIncomingNodes(NodeIdentity nodeIdentity)
     {
@@ -52,13 +67,15 @@ public class GraphEdgesIndex extends AbstractJSONSerializable
             NodeIdentity to = edge.getTo();
             if (from != null)
             {
-                this.outgoingToIncoming.computeIfAbsent(to, f -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
-                                       .add(from);
+                Set<NodeIdentity> nodeIdentities = this.outgoingToIncoming.computeIfAbsent(to, f -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
+                nodeIdentities.add(from);
+                this.outgoingToIncoming.put(to, nodeIdentities);
             }
             if (to != null)
             {
-                this.incomingToOutgoing.computeIfAbsent(from, f -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
-                                       .add(to);
+                Set<NodeIdentity> nodeIdentities = this.incomingToOutgoing.computeIfAbsent(from, f -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
+                nodeIdentities.add(to);
+                this.incomingToOutgoing.put(from, nodeIdentities);
             }
         }
         return this;

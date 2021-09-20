@@ -22,27 +22,44 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
+import org.omnaest.utils.graph.domain.GraphBuilder.RepositoryProvider;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.internal.index.components.GraphEdgesIndex;
 import org.omnaest.utils.graph.internal.index.components.GraphIdentityTokenIndex;
 import org.omnaest.utils.json.AbstractJSONSerializable;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class GraphIndex extends AbstractJSONSerializable
 {
     @JsonIgnore
-    private GraphIdentityTokenIndex graphIdentityTokenIndex = new GraphIdentityTokenIndex();
+    private GraphIdentityTokenIndex graphIdentityTokenIndex;
 
     @JsonProperty
-    private GraphEdgesIndex graphEdgesIndex = new GraphEdgesIndex();
+    private GraphEdgesIndex graphEdgesIndex;
 
     @JsonProperty
-    private Set<NodeIdentity> nodes = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private Set<NodeIdentity> nodes;
 
     @JsonProperty
-    private Set<NodeIdentity> unresolvedNodes = Collections.newSetFromMap(new ConcurrentHashMap<>());
+    private Set<NodeIdentity> unresolvedNodes;
+
+    public GraphIndex(RepositoryProvider repositoryProvider)
+    {
+        super();
+        this.graphIdentityTokenIndex = new GraphIdentityTokenIndex(repositoryProvider);
+        this.graphEdgesIndex = new GraphEdgesIndex(repositoryProvider);
+        this.nodes = repositoryProvider.createSet("nodes");
+        this.unresolvedNodes = repositoryProvider.createSet("unresolvedNodes");
+    }
+
+    @JsonCreator
+    protected GraphIndex()
+    {
+        this((name, keyType, valueType) -> new ConcurrentHashMap<>());
+    }
 
     public GraphIndex addNode(NodeIdentity nodeIdentity)
     {

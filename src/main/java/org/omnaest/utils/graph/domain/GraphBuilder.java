@@ -17,6 +17,7 @@ package org.omnaest.utils.graph.domain;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.SetUtils;
+import org.omnaest.utils.functional.TriFunction;
 
 public interface GraphBuilder
 {
@@ -78,6 +80,15 @@ public interface GraphBuilder
      * @return
      */
     public Graph build();
+
+    /**
+     * Defines the underlying repositories that are created to host the {@link Graph}. This {@link RepositoryProvider} has to be defined before any
+     * {@link NodeIdentity} is added to the {@link GraphBuilder}.
+     * 
+     * @param repositoryProvider
+     * @return
+     */
+    public GraphBuilder withRepositoryProvider(RepositoryProvider repositoryProvider);
 
     /**
      * Marker interface for {@link NodeResolver}s
@@ -222,5 +233,19 @@ public interface GraphBuilder
             return true;
         }
 
+    }
+
+    public static interface RepositoryProvider extends TriFunction<String, Class<?>, Class<?>, Map<?, ?>>
+    {
+        @SuppressWarnings("unchecked")
+        public default <K, V> Map<K, V> createMap(String name)
+        {
+            return (Map<K, V>) this.apply(name, null, null);
+        }
+
+        public default <K> Set<K> createSet(String name)
+        {
+            return Collections.newSetFromMap(this.createMap(name));
+        }
     }
 }

@@ -183,4 +183,102 @@ public class GraphUtilsTest
         }
     }
 
+    @Test
+    public void testClone()
+    {
+        try
+        {
+            NodeIdentity rootNode = NodeIdentity.of("1");
+            NodeIdentity childNode = NodeIdentity.of("1.1");
+            Graph graph = GraphUtils.builder()
+                                    .addEdge(rootNode, childNode)
+                                    .build()
+                                    .clone();
+
+            assertEquals(SetUtils.toSet("1", "1.1"), graph.stream()
+                                                          .map(Node::getIdentity)
+                                                          .map(NodeIdentity::getPrimaryId)
+                                                          .collect(Collectors.toSet()));
+
+            assertTrue(graph.findNodeById(rootNode)
+                            .isPresent());
+            assertFalse(graph.findNodeById(NodeIdentity.of("non existing node id"))
+                             .isPresent());
+            assertEquals("1", graph.findNodeById(rootNode)
+                                   .get()
+                                   .getIdentity()
+                                   .getPrimaryId());
+
+            assertEquals("1.1", graph.findNodeById(rootNode)
+                                     .get()
+                                     .getOutgoingNodes()
+                                     .findById(childNode)
+                                     .get()
+                                     .getIdentity()
+                                     .getPrimaryId());
+            assertEquals("1", graph.findNodeById(childNode)
+                                   .get()
+                                   .getIncomingNodes()
+                                   .findById(rootNode)
+                                   .get()
+                                   .getIdentity()
+                                   .getPrimaryId());
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            throw e;
+        }
+    }
+
+    @Test
+    public void testSerialization()
+    {
+        try
+        {
+            NodeIdentity rootNode = NodeIdentity.of("1");
+            NodeIdentity childNode = NodeIdentity.of("1.1");
+            String json = GraphUtils.builder()
+                                    .addEdge(rootNode, childNode)
+                                    .build()
+                                    .serialize()
+                                    .toJson();
+            Graph graph = GraphUtils.deserialize()
+                                    .fromJson(json);
+
+            assertEquals(SetUtils.toSet("1", "1.1"), graph.stream()
+                                                          .map(Node::getIdentity)
+                                                          .map(NodeIdentity::getPrimaryId)
+                                                          .collect(Collectors.toSet()));
+
+            assertTrue(graph.findNodeById(rootNode)
+                            .isPresent());
+            assertFalse(graph.findNodeById(NodeIdentity.of("non existing node id"))
+                             .isPresent());
+            assertEquals("1", graph.findNodeById(rootNode)
+                                   .get()
+                                   .getIdentity()
+                                   .getPrimaryId());
+
+            assertEquals("1.1", graph.findNodeById(rootNode)
+                                     .get()
+                                     .getOutgoingNodes()
+                                     .findById(childNode)
+                                     .get()
+                                     .getIdentity()
+                                     .getPrimaryId());
+            assertEquals("1", graph.findNodeById(childNode)
+                                   .get()
+                                   .getIncomingNodes()
+                                   .findById(rootNode)
+                                   .get()
+                                   .getIdentity()
+                                   .getPrimaryId());
+        }
+        catch (Exception e)
+        {
+            e.printStackTrace();
+            throw e;
+        }
+    }
 }

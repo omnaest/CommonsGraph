@@ -56,4 +56,19 @@ public interface Graph extends Streamable<Node>
      * @return
      */
     public GraphResolver resolver();
+
+    /**
+     * Clones the current {@link Graph} instance into a new in memory {@link Graph}
+     * 
+     * @return
+     */
+    public Graph clone();
+
+    /**
+     * Returns a {@link GraphSerializer} for this {@link Graph} instance.
+     * 
+     * @return
+     */
+    public GraphSerializer serialize();
+
 }

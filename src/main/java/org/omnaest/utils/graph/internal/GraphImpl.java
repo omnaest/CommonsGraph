@@ -20,9 +20,11 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.omnaest.utils.JSONHelper;
 import org.omnaest.utils.graph.domain.Graph;
 import org.omnaest.utils.graph.domain.GraphResolver;
 import org.omnaest.utils.graph.domain.GraphRouter;
+import org.omnaest.utils.graph.domain.GraphSerializer;
 import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Nodes;
@@ -33,6 +35,10 @@ import org.omnaest.utils.graph.internal.node.NodesImpl;
 import org.omnaest.utils.graph.internal.resolver.GraphResolverImpl;
 import org.omnaest.utils.graph.internal.router.GraphRouterImpl;
 
+/**
+ * @see Graph
+ * @author omnaest
+ */
 public class GraphImpl implements Graph
 {
     private GraphIndex          graphIndex;
@@ -100,4 +106,34 @@ public class GraphImpl implements Graph
         return this.graphIndex.toString();
     }
 
+    @Override
+    public Graph clone()
+    {
+        GraphIndex clonedGraphIndex = JSONHelper.<GraphIndex>cloner()
+                                                .usingKeyDeserializer(NodeIdentity.class, new NodeIdentityKeyDeserializer())
+                                                .apply(this.graphIndex);
+        return new GraphImpl(clonedGraphIndex, new NodeResolverSupport(clonedGraphIndex));
+    }
+
+    public static Graph fromJson(String json)
+    {
+        GraphIndex clonedGraphIndex = JSONHelper.deserializer(GraphIndex.class)
+                                                .withKeyDeserializer(NodeIdentity.class, new NodeIdentityKeyDeserializer())
+                                                .apply(json);
+        return new GraphImpl(clonedGraphIndex, new NodeResolverSupport(clonedGraphIndex));
+    }
+
+    @Override
+    public GraphSerializer serialize()
+    {
+        GraphIndex graphIndex = this.graphIndex;
+        return new GraphSerializer()
+        {
+            @Override
+            public String toJson()
+            {
+                return JSONHelper.serialize(graphIndex);
+            }
+        };
+    }
 }

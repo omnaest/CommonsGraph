@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import org.omnaest.utils.SetUtils;
@@ -29,8 +30,114 @@ import org.omnaest.utils.graph.internal.index.GraphIndex;
 
 public class GraphBuilderImpl implements GraphBuilder
 {
-    private GraphIndex          graphIndex          = new GraphIndex();
-    private NodeResolverSupport nodeResolverSupport = new NodeResolverSupport(this.graphIndex);
+    private GraphIndexContext graphIndexContext = new GraphIndexContext((name, keyType, valueType) -> new ConcurrentHashMap<>());
+
+    @Override
+    public GraphBuilder withRepositoryProvider(RepositoryProvider repositoryProvider)
+    {
+        if (!this.graphIndexContext.getGraphIndex()
+                                   .getNodes()
+                                   .isEmpty())
+        {
+            throw new IllegalStateException("Repository provider can only be changed before any nodes have been added.");
+        }
+
+        this.graphIndexContext = new GraphIndexContext(repositoryProvider);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder addNode(NodeIdentity nodeIdentity)
+    {
+        this.graphIndexContext.getGraphIndex()
+                              .addNode(nodeIdentity);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder addNodes(Collection<NodeIdentity> nodeIdentities)
+    {
+        this.graphIndexContext.getGraphIndex()
+                              .addNodes(nodeIdentities);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder addEdge(NodeIdentity from, NodeIdentity to)
+    {
+        this.graphIndexContext.getGraphIndex()
+                              .addEdge(from, to);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder addEdge(EdgeIdentity edgeIdentity)
+    {
+        this.graphIndexContext.getGraphIndex()
+                              .addEdge(edgeIdentity);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder addBidirectionalEdge(NodeIdentity from, NodeIdentity to)
+    {
+        return this.addEdge(from, to)
+                   .addEdge(to, from);
+    }
+
+    @Override
+    public Graph build()
+    {
+        return new GraphImpl(this.graphIndexContext.getGraphIndex(), this.graphIndexContext.getNodeResolverSupport());
+    }
+
+    @Override
+    public GraphBuilder withSingleNodeResolver(SingleNodeResolver nodeResolver)
+    {
+        this.graphIndexContext.getNodeResolverSupport()
+                              .add(nodeResolver);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder withBidirectionalSingleNodeResolver(SingleNodeResolver nodeResolver)
+    {
+        this.graphIndexContext.getNodeResolverSupport()
+                              .addBidirectional(nodeResolver);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder withMultiNodeResolver(MultiNodeResolver nodeResolver)
+    {
+        this.graphIndexContext.getNodeResolverSupport()
+                              .add(nodeResolver);
+        return this;
+    }
+
+    private static class GraphIndexContext
+    {
+        private final GraphIndex          graphIndex;
+        private final NodeResolverSupport nodeResolverSupport;
+
+        public GraphIndexContext(RepositoryProvider repositoryProvider)
+        {
+            super();
+            this.graphIndex = new GraphIndex(repositoryProvider);
+            this.nodeResolverSupport = new NodeResolverSupport(this.graphIndex);
+        }
+
+        public GraphIndex getGraphIndex()
+        {
+            return this.graphIndex;
+        }
+
+        public NodeResolverSupport getNodeResolverSupport()
+        {
+            return this.nodeResolverSupport;
+        }
+
+    }
 
     public static class NodeResolverSupport
     {
@@ -94,68 +201,6 @@ public class GraphBuilderImpl implements GraphBuilder
             return this.resolve(SetUtils.toSet(nodeIdentity));
         }
 
-    }
-
-    @Override
-    public GraphBuilder addNode(NodeIdentity nodeIdentity)
-    {
-        this.graphIndex.addNode(nodeIdentity);
-        return this;
-    }
-
-    @Override
-    public GraphBuilder addNodes(Collection<NodeIdentity> nodeIdentities)
-    {
-        this.graphIndex.addNodes(nodeIdentities);
-        return this;
-    }
-
-    @Override
-    public GraphBuilder addEdge(NodeIdentity from, NodeIdentity to)
-    {
-        this.graphIndex.addEdge(from, to);
-        return this;
-    }
-
-    @Override
-    public GraphBuilder addEdge(EdgeIdentity edgeIdentity)
-    {
-        this.graphIndex.addEdge(edgeIdentity);
-        return this;
-    }
-
-    @Override
-    public GraphBuilder addBidirectionalEdge(NodeIdentity from, NodeIdentity to)
-    {
-        return this.addEdge(from, to)
-                   .addEdge(to, from);
-    }
-
-    @Override
-    public Graph build()
-    {
-        return new GraphImpl(this.graphIndex, this.nodeResolverSupport);
-    }
-
-    @Override
-    public GraphBuilder withSingleNodeResolver(SingleNodeResolver nodeResolver)
-    {
-        this.nodeResolverSupport.add(nodeResolver);
-        return this;
-    }
-
-    @Override
-    public GraphBuilder withBidirectionalSingleNodeResolver(SingleNodeResolver nodeResolver)
-    {
-        this.nodeResolverSupport.addBidirectional(nodeResolver);
-        return this;
-    }
-
-    @Override
-    public GraphBuilder withMultiNodeResolver(MultiNodeResolver nodeResolver)
-    {
-        this.nodeResolverSupport.add(nodeResolver);
-        return this;
     }
 
 }

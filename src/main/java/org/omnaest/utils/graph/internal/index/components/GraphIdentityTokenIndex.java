@@ -22,15 +22,34 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.omnaest.utils.MapperUtils;
+import org.omnaest.utils.graph.domain.GraphBuilder.RepositoryProvider;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.json.AbstractJSONSerializable;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class GraphIdentityTokenIndex extends AbstractJSONSerializable
 {
     @JsonProperty
-    private Map<Integer, Map<String, Set<NodeIdentity>>> identityTokenIndexToTokenToNodes = new ConcurrentHashMap<>();
+    private Map<Integer, Map<String, Set<NodeIdentity>>> identityTokenIndexToTokenToNodes;
+
+    @JsonIgnore
+    private RepositoryProvider repositoryProvider;
+
+    public GraphIdentityTokenIndex(RepositoryProvider repositoryProvider)
+    {
+        super();
+        this.repositoryProvider = repositoryProvider;
+        this.identityTokenIndexToTokenToNodes = repositoryProvider.createMap("identityTokenIndexToTokenToNodes");
+    }
+
+    @JsonCreator
+    protected GraphIdentityTokenIndex()
+    {
+        this((name, keyType, valueType) -> new ConcurrentHashMap<>());
+    }
 
     public void addNodeToIdentityTokenIndex(NodeIdentity nodeIdentity)
     {
@@ -42,9 +61,12 @@ public class GraphIdentityTokenIndex extends AbstractJSONSerializable
                 {
                     int index = tokenAndIndex.getSecond();
                     String token = tokenAndIndex.getFirst();
-                    this.identityTokenIndexToTokenToNodes.computeIfAbsent(index, i -> new ConcurrentHashMap<>())
-                                                         .computeIfAbsent(token, t -> Collections.newSetFromMap(new ConcurrentHashMap<>()))
-                                                         .add(nodeIdentity);
+                    Map<String, Set<NodeIdentity>> tokenIndexRepository = this.identityTokenIndexToTokenToNodes.computeIfAbsent(index,
+                                                                                                                                i -> this.repositoryProvider.createMap("identityTokenIndexToTokenToNodes"
+                                                                                                                                        + i));
+                    Set<NodeIdentity> associatedNodes = tokenIndexRepository.computeIfAbsent(token, t -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
+                    associatedNodes.add(nodeIdentity);
+                    tokenIndexRepository.put(token, associatedNodes);
                 });
     }
 }

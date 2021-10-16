@@ -21,9 +21,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.omnaest.utils.graph.domain.Attribute;
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.graph.domain.GraphBuilder.RepositoryProvider;
 import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.internal.GraphImpl;
 import org.omnaest.utils.graph.internal.index.components.GraphEdgesIndex;
 import org.omnaest.utils.graph.internal.index.components.GraphIdentityTokenIndex;
 import org.omnaest.utils.json.AbstractJSONSerializable;
@@ -32,9 +34,13 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+/**
+ * @see GraphImpl
+ * @author omnaest
+ */
 public class GraphIndex extends AbstractJSONSerializable
 {
-    @JsonIgnore
+    @JsonProperty
     private GraphIdentityTokenIndex graphIdentityTokenIndex;
 
     @JsonProperty
@@ -82,6 +88,11 @@ public class GraphIndex extends AbstractJSONSerializable
 
     }
 
+    public GraphIndex addEdge(NodeIdentity from, NodeIdentity to, Collection<Attribute> attributes)
+    {
+        return this.addEdge(EdgeIdentity.of(from, to), attributes);
+    }
+
     public GraphIndex addEdge(NodeIdentity from, NodeIdentity to)
     {
         return this.addEdge(EdgeIdentity.of(from, to));
@@ -112,11 +123,16 @@ public class GraphIndex extends AbstractJSONSerializable
 
     public GraphIndex addEdge(EdgeIdentity edge)
     {
+        return this.addEdge(edge, null);
+    }
+
+    public GraphIndex addEdge(EdgeIdentity edge, Collection<Attribute> attributes)
+    {
         if (edge != null)
         {
             this.addNode(edge.getFrom())
                 .addNode(edge.getTo());
-            this.graphEdgesIndex.addEdge(edge);
+            this.graphEdgesIndex.addEdge(edge, attributes);
         }
         return this;
     }
@@ -151,6 +167,86 @@ public class GraphIndex extends AbstractJSONSerializable
     public boolean hasUnresolvedNodes()
     {
         return !this.unresolvedNodes.isEmpty();
+    }
+
+    @Override
+    public int hashCode()
+    {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((this.graphEdgesIndex == null) ? 0 : this.graphEdgesIndex.hashCode());
+        result = prime * result + ((this.graphIdentityTokenIndex == null) ? 0 : this.graphIdentityTokenIndex.hashCode());
+        result = prime * result + ((this.nodes == null) ? 0 : this.nodes.hashCode());
+        result = prime * result + ((this.unresolvedNodes == null) ? 0 : this.unresolvedNodes.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj)
+    {
+        if (this == obj)
+        {
+            return true;
+        }
+        if (obj == null)
+        {
+            return false;
+        }
+        if (this.getClass() != obj.getClass())
+        {
+            return false;
+        }
+        GraphIndex other = (GraphIndex) obj;
+        if (this.graphEdgesIndex == null)
+        {
+            if (other.graphEdgesIndex != null)
+            {
+                return false;
+            }
+        }
+        else if (!this.graphEdgesIndex.equals(other.graphEdgesIndex))
+        {
+            return false;
+        }
+        if (this.graphIdentityTokenIndex == null)
+        {
+            if (other.graphIdentityTokenIndex != null)
+            {
+                return false;
+            }
+        }
+        else if (!this.graphIdentityTokenIndex.equals(other.graphIdentityTokenIndex))
+        {
+            return false;
+        }
+        if (this.nodes == null)
+        {
+            if (other.nodes != null)
+            {
+                return false;
+            }
+        }
+        else if (!this.nodes.equals(other.nodes))
+        {
+            return false;
+        }
+        if (this.unresolvedNodes == null)
+        {
+            if (other.unresolvedNodes != null)
+            {
+                return false;
+            }
+        }
+        else if (!this.unresolvedNodes.equals(other.unresolvedNodes))
+        {
+            return false;
+        }
+        return true;
+    }
+
+    public Optional<Set<Attribute>> getEdgeAttributes(NodeIdentity from, NodeIdentity to)
+    {
+        return this.graphEdgesIndex.getEdge(from, to);
     }
 
 }

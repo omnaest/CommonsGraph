@@ -50,6 +50,26 @@ public interface GraphBuilder
     public GraphBuilder addEdge(EdgeIdentity edgeIdentity);
 
     /**
+     * Similar to {@link #addEdge(NodeIdentity, NodeIdentity)} but allows to bind a given {@link Collection} of {@link Attribute}s to an edge.
+     * 
+     * @param from
+     * @param to
+     * @param attributes
+     * @return
+     */
+    public GraphBuilder addEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Collection<Attribute> attributes);
+
+    /**
+     * Similar to {@link #addEdgeWithAttributes(NodeIdentity, NodeIdentity, Collection)}
+     * 
+     * @param from
+     * @param to
+     * @param attributes
+     * @return
+     */
+    public GraphBuilder addEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Attribute... attributes);
+
+    /**
      * Adds the forward and backward directed edges
      * 
      * @param from
@@ -57,6 +77,12 @@ public interface GraphBuilder
      * @return
      */
     public GraphBuilder addBidirectionalEdge(NodeIdentity from, NodeIdentity to);
+
+    public GraphBuilder addBidirectionalEdgeWithTags(NodeIdentity from, NodeIdentity to, Collection<Tag> tags);
+
+    public GraphBuilder addBidirectionalEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Collection<Attribute> attributes);
+
+    public GraphBuilder addBidirectionalEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Attribute... attributes);
 
     /**
      * Adds a {@link Node} with the given {@link NodeIdentity} to the {@link Graph}

@@ -47,7 +47,7 @@ public interface Graph extends Streamable<Node>
      */
     public Nodes findNodesByIds(Collection<NodeIdentity> nodeIdentities);
 
-    public GraphRouter newRouter();
+    public GraphRouter routing();
 
     public int size();
 
@@ -70,5 +70,14 @@ public interface Graph extends Streamable<Node>
      * @return
      */
     public GraphSerializer serialize();
+
+    /**
+     * Finds an {@link Edge} from one {@link NodeIdentity} to another. Be aware that the edge is direction dependent.
+     * 
+     * @param from
+     * @param to
+     * @return
+     */
+    public Optional<Edge> findEdge(NodeIdentity from, NodeIdentity to);
 
 }

@@ -3,6 +3,7 @@ package org.omnaest.utils.graph.internal;
 import java.io.IOException;
 
 import org.omnaest.utils.JSONHelper;
+import org.omnaest.utils.exception.handler.ExceptionHandler;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 
 import com.fasterxml.jackson.databind.DeserializationContext;
@@ -14,6 +15,7 @@ public class NodeIdentityKeyDeserializer extends KeyDeserializer
     public Object deserializeKey(String key, DeserializationContext ctxt) throws IOException
     {
         return JSONHelper.deserializer(NodeIdentity.class)
+                         .withExceptionHandler(ExceptionHandler.rethrowingExceptionHandler())
                          .apply(key);
     }
 }

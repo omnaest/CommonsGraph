@@ -15,6 +15,8 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.domain;
 
+import java.util.Optional;
+
 import org.omnaest.utils.graph.domain.GraphBuilder.NodeResolver;
 
 /**
@@ -28,10 +30,34 @@ public interface Node
 
     public Nodes getIncomingNodes();
 
+    public Edges getOutgoingEdges();
+
+    public Edges getIncomingEdges();
+
+    /**
+     * Returns all {@link #getIncomingEdges()} and {@link #getOutgoingEdges()}
+     * 
+     * @return
+     */
+    public Edges getAllEdges();
+
+    /**
+     * Finds all {@link #getAllEdges()} having the given {@link Tag}
+     * 
+     * @param tag
+     * @return
+     */
+    public Edges findAllEdgesWithTag(Tag tag);
+
+    public Optional<Edge> findOutgoingEdgeTo(NodeIdentity nodeIdentity);
+
+    public Optional<Edge> findIncomingEdgeFrom(NodeIdentity nodeIdentity);
+
     /**
      * Resolves all lazy connections to this {@link Node} using the defined {@link NodeResolver}s of the {@link Graph}
      * 
      * @return
      */
     public Node resolve();
+
 }

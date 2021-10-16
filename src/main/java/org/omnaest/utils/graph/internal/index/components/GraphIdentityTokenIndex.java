@@ -69,4 +69,44 @@ public class GraphIdentityTokenIndex extends AbstractJSONSerializable
                     tokenIndexRepository.put(token, associatedNodes);
                 });
     }
+
+    @Override
+    public int hashCode()
+    {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((this.identityTokenIndexToTokenToNodes == null) ? 0 : this.identityTokenIndexToTokenToNodes.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj)
+    {
+        if (this == obj)
+        {
+            return true;
+        }
+        if (obj == null)
+        {
+            return false;
+        }
+        if (this.getClass() != obj.getClass())
+        {
+            return false;
+        }
+        GraphIdentityTokenIndex other = (GraphIdentityTokenIndex) obj;
+        if (this.identityTokenIndexToTokenToNodes == null)
+        {
+            if (other.identityTokenIndexToTokenToNodes != null)
+            {
+                return false;
+            }
+        }
+        else if (!this.identityTokenIndexToTokenToNodes.equals(other.identityTokenIndexToTokenToNodes))
+        {
+            return false;
+        }
+        return true;
+    }
+
 }

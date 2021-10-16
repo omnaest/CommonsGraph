@@ -17,8 +17,15 @@ package org.omnaest.utils.graph.internal.router.route;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.omnaest.utils.ListUtils;
+import org.omnaest.utils.MapperUtils;
+import org.omnaest.utils.graph.domain.Edge;
 import org.omnaest.utils.graph.domain.Graph;
 import org.omnaest.utils.graph.domain.GraphRouter.Route;
 import org.omnaest.utils.graph.domain.Node;
@@ -43,12 +50,40 @@ public class RouteImpl implements Route
     }
 
     @Override
+    public Route addToNew(NodeIdentity nodeIdentity)
+    {
+        return new RouteImpl(ListUtils.addToNew(this.route, nodeIdentity), this.graph);
+    }
+
+    @Override
+    public Optional<Edge> lastEdge()
+    {
+        return this.lastNth(1)
+                   .flatMap(incomingNode -> this.graph.findEdge(incomingNode.getIdentity(), this.last()
+                                                                                                .get()
+                                                                                                .getIdentity()));
+    }
+
+    @Override
     public int hashCode()
     {
         final int prime = 31;
         int result = 1;
         result = prime * result + ((this.route == null) ? 0 : this.route.hashCode());
         return result;
+    }
+
+    @Override
+    public boolean isCyclic()
+    {
+        Map<NodeIdentity, Long> nodeIdentityToCount = this.toNodeIdentities()
+                                                          .stream()
+                                                          .collect(Collectors.groupingBy(MapperUtils.identity(), Collectors.counting()));
+        return nodeIdentityToCount.values()
+                                  .stream()
+                                  .filter(count -> count > 1)
+                                  .findAny()
+                                  .isPresent();
     }
 
     @Override
@@ -91,8 +126,26 @@ public class RouteImpl implements Route
     public Stream<Node> stream()
     {
         return this.route.stream()
-                         .map(nodeIdentity -> this.graph.findNodeById(nodeIdentity)
-                                                        .get());
+                         .map(this.createNodeIdentityToNodeMapper());
+    }
+
+    private Function<NodeIdentity, Node> createNodeIdentityToNodeMapper()
+    {
+        return nodeIdentity -> this.graph.findNodeById(nodeIdentity)
+                                         .get();
+    }
+
+    @Override
+    public Optional<Node> last()
+    {
+        return this.lastNth(0);
+    }
+
+    @Override
+    public Optional<Node> lastNth(int index)
+    {
+        return ListUtils.optionalLast(this.route, index)
+                        .map(this.createNodeIdentityToNodeMapper());
     }
 
 }

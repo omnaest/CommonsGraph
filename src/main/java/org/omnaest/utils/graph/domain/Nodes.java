@@ -30,4 +30,25 @@ public interface Nodes extends Streamable<Node>
      * @return
      */
     public Nodes resolveAll();
+
+    /**
+     * Returns true, if this {@link Nodes} instance contains any {@link Node}
+     * 
+     * @return
+     */
+    public boolean hasAny();
+
+    /**
+     * Returns true, if this {@link Nodes} instance contains no {@link Node}s at all.
+     * 
+     * @return
+     */
+    public boolean hasNone();
+
+    /**
+     * Returns the number of {@link Node}s
+     * 
+     * @return
+     */
+    public int size();
 }

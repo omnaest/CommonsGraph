@@ -15,17 +15,33 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.internal.node;
 
+import java.util.Collections;
+import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import org.omnaest.utils.graph.domain.Attribute;
+import org.omnaest.utils.graph.domain.Edge;
+import org.omnaest.utils.graph.domain.Edges;
 import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Nodes;
+import org.omnaest.utils.graph.domain.Tag;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
+import org.omnaest.utils.graph.internal.edge.EdgeImpl;
+import org.omnaest.utils.graph.internal.edge.EdgesImpl;
 import org.omnaest.utils.graph.internal.index.GraphIndex;
 
+/**
+ * @see Node
+ * @author omnaest
+ */
 public class NodeImpl implements Node
 {
-    private final NodeIdentity  nodeIdentity;
-    private final GraphIndex    graphIndex;
-    private NodeResolverSupport nodeResolverSupport;
+    private final NodeIdentity        nodeIdentity;
+    private final GraphIndex          graphIndex;
+    private final NodeResolverSupport nodeResolverSupport;
 
     public NodeImpl(NodeIdentity nodeIdentity, GraphIndex graphIndex, NodeResolverSupport nodeResolverSupport)
     {
@@ -86,6 +102,95 @@ public class NodeImpl implements Node
     public String toString()
     {
         return this.nodeIdentity.toString();
+    }
+
+    @Override
+    public Edges getOutgoingEdges()
+    {
+        return new EdgesImpl(this.getOutgoingNodes()
+                                 .stream()
+                                 .map(node ->
+                                 {
+                                     Node from = this;
+                                     Node to = node;
+                                     Set<Attribute> attributes = this.graphIndex.getEdgeAttributes(from.getIdentity(), to.getIdentity())
+                                                                                .orElse(Collections.emptySet());
+
+                                     return new EdgeImpl(from, to, attributes);
+                                 })
+                                 .collect(Collectors.toList()));
+    }
+
+    @Override
+    public Edges getIncomingEdges()
+    {
+        return new EdgesImpl(this.getIncomingNodes()
+                                 .stream()
+                                 .map(node ->
+                                 {
+                                     Node from = node;
+                                     Node to = this;
+                                     Set<Attribute> attributes = this.graphIndex.getEdgeAttributes(from.getIdentity(), to.getIdentity())
+                                                                                .orElse(Collections.emptySet());
+
+                                     return new EdgeImpl(from, to, attributes);
+                                 })
+                                 .collect(Collectors.toList()));
+    }
+
+    @Override
+    public Edges getAllEdges()
+    {
+        return new EdgesImpl(Stream.concat(this.getIncomingEdges()
+                                               .stream(),
+                                           this.getOutgoingEdges()
+                                               .stream())
+                                   .collect(Collectors.toList()));
+    }
+
+    @Override
+    public Edges findAllEdgesWithTag(Tag tag)
+    {
+        return new EdgesImpl(this.getAllEdges()
+                                 .stream()
+                                 .filter(edge -> edge.hasTag(tag))
+                                 .collect(Collectors.toList()));
+    }
+
+    @Override
+    public Optional<Edge> findOutgoingEdgeTo(NodeIdentity nodeIdentity)
+    {
+        if (this.graphIndex.getOutgoingNodes(this.nodeIdentity)
+                           .contains(nodeIdentity))
+        {
+            Node from = this;
+            Node to = new NodeImpl(nodeIdentity, this.graphIndex, this.nodeResolverSupport);
+            Set<Attribute> attributes = this.graphIndex.getEdgeAttributes(from.getIdentity(), to.getIdentity())
+                                                       .orElse(Collections.emptySet());
+            return Optional.of(new EdgeImpl(from, to, attributes));
+        }
+        else
+        {
+            return Optional.empty();
+        }
+    }
+
+    @Override
+    public Optional<Edge> findIncomingEdgeFrom(NodeIdentity nodeIdentity)
+    {
+        if (this.graphIndex.getIncomingNodes(this.nodeIdentity)
+                           .contains(nodeIdentity))
+        {
+            Node from = new NodeImpl(nodeIdentity, this.graphIndex, this.nodeResolverSupport);
+            Node to = this;
+            Set<Attribute> attributes = this.graphIndex.getEdgeAttributes(from.getIdentity(), to.getIdentity())
+                                                       .orElse(Collections.emptySet());
+            return Optional.of(new EdgeImpl(from, to, attributes));
+        }
+        else
+        {
+            return Optional.empty();
+        }
     }
 
 }

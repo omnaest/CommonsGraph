@@ -18,19 +18,31 @@ package org.omnaest.utils.graph;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import org.junit.Test;
+import org.omnaest.utils.JSONHelper;
 import org.omnaest.utils.SetUtils;
+import org.omnaest.utils.graph.domain.Attribute;
 import org.omnaest.utils.graph.domain.Graph;
+import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.graph.domain.GraphRouter;
+import org.omnaest.utils.graph.domain.GraphRouter.Route;
+import org.omnaest.utils.graph.domain.GraphRouter.RouteAndTraversalControl;
 import org.omnaest.utils.graph.domain.GraphRouter.Routes;
+import org.omnaest.utils.graph.domain.GraphRouter.TraversalRoutes;
 import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.Tag;
+import org.omnaest.utils.supplier.SupplierConsumer;
 
 /**
  * @see GraphUtils
@@ -79,6 +91,36 @@ public class GraphUtilsTest
     }
 
     @Test
+    public void testAttributes() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity childNode = NodeIdentity.of("1.1");
+        Graph graph = GraphUtils.builder()
+                                .addEdgeWithAttributes(rootNode, childNode, Arrays.asList(Tag.of("tag1"), Attribute.of("attribute1", "value1")))
+                                .build();
+
+        assertEquals(SetUtils.toSet("1", "1.1"), graph.stream()
+                                                      .map(Node::getIdentity)
+                                                      .map(NodeIdentity::getPrimaryId)
+                                                      .collect(Collectors.toSet()));
+        assertEquals(SetUtils.toSet(Tag.of("tag1"), Attribute.of("attribute1", "value1")), graph.findEdge(rootNode, childNode)
+                                                                                                .get()
+                                                                                                .getAttributes());
+        assertTrue(graph.findEdge(rootNode, childNode)
+                        .get()
+                        .hasTag(Tag.of("tag1")));
+        assertFalse(graph.findEdge(rootNode, childNode)
+                         .get()
+                         .hasTag(Tag.of("tagNonExisting")));
+        assertEquals(childNode, graph.findNodeById(rootNode)
+                                     .map(node -> node.findAllEdgesWithTag(Tag.of("tag1")))
+                                     .flatMap(edges -> edges.last())
+                                     .get()
+                                     .getTo()
+                                     .getIdentity());
+    }
+
+    @Test
     public void testRouter() throws Exception
     {
         NodeIdentity rootNode = NodeIdentity.of("1");
@@ -95,7 +137,7 @@ public class GraphUtilsTest
 
         assertEquals(5, graph.size());
 
-        GraphRouter router = graph.newRouter();
+        GraphRouter router = graph.routing();
 
         {
             Routes routes = router.withBreadthFirst()
@@ -156,7 +198,7 @@ public class GraphUtilsTest
 
         assertEquals(1, graph.size());
 
-        GraphRouter router = graph.newRouter();
+        GraphRouter router = graph.routing();
 
         {
             Routes routes = router.withBreadthFirst()
@@ -181,6 +223,78 @@ public class GraphUtilsTest
                                                                    .map(NodeIdentity::getPrimaryId)
                                                                    .collect(Collectors.toList()));
         }
+    }
+
+    @Test
+    public void testTraversal() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1)
+                                .addEdge(rootNode, intermediateNode2)
+                                .addEdge(rootNode, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode2, childNode3)
+                                .build();
+
+        assertEquals(Arrays.asList(rootNode, intermediateNode1, intermediateNode2, childNode1, childNode2), graph.routing()
+                                                                                                                 .withBreadthFirst()
+                                                                                                                 .traverseOutgoing()
+                                                                                                                 .stream()
+                                                                                                                 .flatMap(TraversalRoutes::stream)
+                                                                                                                 .peek(control -> control.skipIf(control.get()
+                                                                                                                                                        .last()
+                                                                                                                                                        .get()
+                                                                                                                                                        .getIdentity()
+                                                                                                                                                        .equals(intermediateNode2)))
+                                                                                                                 .peek(control -> control.skipNextRouteNodes(intermediateNode3))
+                                                                                                                 .map(RouteAndTraversalControl::get)
+                                                                                                                 .peek(route -> assertFalse(route.isCyclic()))
+                                                                                                                 .map(Route::last)
+                                                                                                                 .map(Optional::get)
+                                                                                                                 .map(Node::getIdentity)
+                                                                                                                 .collect(Collectors.toList()));
+    }
+
+    @Test
+    public void testTraversalOfCyclicGraph() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode = NodeIdentity.of("1.1");
+        NodeIdentity childNode = NodeIdentity.of("1.1.1");
+
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode)
+                                .addEdge(intermediateNode, childNode)
+                                .addEdge(childNode, rootNode) // cycle
+                                .build();
+
+        AtomicReference<Route> cycleHitRoute = new AtomicReference<>();
+        assertEquals(Arrays.asList(rootNode, intermediateNode, childNode), graph.routing()
+                                                                                .withBreadthFirst()
+                                                                                .traverseOutgoing(rootNode)
+                                                                                .withAlreadyVisitedNodesHitHandler(routes -> cycleHitRoute.set(routes.first()
+                                                                                                                                                     .get()))
+                                                                                .stream()
+                                                                                .flatMap(TraversalRoutes::stream)
+                                                                                .map(RouteAndTraversalControl::get)
+                                                                                .map(Route::last)
+                                                                                .map(Optional::get)
+                                                                                .map(Node::getIdentity)
+                                                                                .collect(Collectors.toList()));
+        assertEquals(rootNode, cycleHitRoute.get()
+                                            .last()
+                                            .get()
+                                            .getIdentity());
+        assertTrue(cycleHitRoute.get()
+                                .isCyclic());
     }
 
     @Test
@@ -280,5 +394,48 @@ public class GraphUtilsTest
             e.printStackTrace();
             throw e;
         }
+    }
+
+    @Test
+    public void testNewCachedGraph() throws Exception
+    {
+        SupplierConsumer<String> cache = this.createCache();
+        Graph graph = GraphUtils.newCachedGraph(cache, this.createGraphPreparator());
+        Graph graph2 = GraphUtils.newCachedGraph(cache, builder ->
+        {
+            fail("Builder block should not be called again");
+        });
+        assertEquals(graph, graph2);
+    }
+
+    private Consumer<GraphBuilder> createGraphPreparator()
+    {
+        return graphBuilder ->
+        {
+            NodeIdentity rootNode = NodeIdentity.of("C1");
+            NodeIdentity childNode = NodeIdentity.of("C1.1");
+            graphBuilder.addBidirectionalEdge(rootNode, childNode);
+        };
+    }
+
+    private SupplierConsumer<String> createCache()
+    {
+        return new SupplierConsumer<String>()
+        {
+            private String json;
+
+            @Override
+            public void accept(String json)
+            {
+                this.json = JSONHelper.serialize(json);
+            }
+
+            @Override
+            public String get()
+            {
+                return JSONHelper.deserializer(String.class)
+                                 .apply(this.json);
+            }
+        };
     }
 }

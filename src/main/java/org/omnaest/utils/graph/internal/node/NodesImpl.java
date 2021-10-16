@@ -67,4 +67,23 @@ public class NodesImpl implements Nodes
         }
         return this;
     }
+
+    @Override
+    public boolean hasAny()
+    {
+        return !this.nodeIdentities.isEmpty();
+    }
+
+    @Override
+    public boolean hasNone()
+    {
+        return !this.hasAny();
+    }
+
+    @Override
+    public int size()
+    {
+        return this.nodeIdentities.size();
+    }
+
 }

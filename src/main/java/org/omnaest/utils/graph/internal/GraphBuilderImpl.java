@@ -16,16 +16,22 @@
 package org.omnaest.utils.graph.internal;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+import org.omnaest.utils.MapperUtils;
 import org.omnaest.utils.SetUtils;
+import org.omnaest.utils.graph.domain.Attribute;
 import org.omnaest.utils.graph.domain.Graph;
 import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.Tag;
 import org.omnaest.utils.graph.internal.index.GraphIndex;
 
 public class GraphBuilderImpl implements GraphBuilder
@@ -71,6 +77,20 @@ public class GraphBuilderImpl implements GraphBuilder
     }
 
     @Override
+    public GraphBuilder addEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Collection<Attribute> attributes)
+    {
+        this.graphIndexContext.getGraphIndex()
+                              .addEdge(from, to, attributes);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder addEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Attribute... attributes)
+    {
+        return this.addEdgeWithAttributes(from, to, Arrays.asList(attributes));
+    }
+
+    @Override
     public GraphBuilder addEdge(EdgeIdentity edgeIdentity)
     {
         this.graphIndexContext.getGraphIndex()
@@ -83,6 +103,29 @@ public class GraphBuilderImpl implements GraphBuilder
     {
         return this.addEdge(from, to)
                    .addEdge(to, from);
+    }
+
+    @Override
+    public GraphBuilder addBidirectionalEdgeWithTags(NodeIdentity from, NodeIdentity to, Collection<Tag> tags)
+    {
+        return this.addBidirectionalEdgeWithAttributes(from, to, Optional.ofNullable(tags)
+                                                                         .orElse(Collections.emptyList())
+                                                                         .stream()
+                                                                         .map(MapperUtils.identity())
+                                                                         .collect(Collectors.toList()));
+    }
+
+    @Override
+    public GraphBuilder addBidirectionalEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Collection<Attribute> attributes)
+    {
+        return this.addEdgeWithAttributes(from, to, attributes)
+                   .addEdgeWithAttributes(to, from, attributes);
+    }
+
+    @Override
+    public GraphBuilder addBidirectionalEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Attribute... attributes)
+    {
+        return this.addBidirectionalEdgeWithAttributes(from, to, Arrays.asList(attributes));
     }
 
     @Override

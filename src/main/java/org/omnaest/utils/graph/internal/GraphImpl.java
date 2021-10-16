@@ -15,12 +15,16 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.internal;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.JSONHelper;
+import org.omnaest.utils.OptionalUtils;
+import org.omnaest.utils.exception.handler.ExceptionHandler;
+import org.omnaest.utils.graph.domain.Edge;
 import org.omnaest.utils.graph.domain.Graph;
 import org.omnaest.utils.graph.domain.GraphResolver;
 import org.omnaest.utils.graph.domain.GraphRouter;
@@ -29,11 +33,16 @@ import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Nodes;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
+import org.omnaest.utils.graph.internal.edge.EdgeImpl;
 import org.omnaest.utils.graph.internal.index.GraphIndex;
 import org.omnaest.utils.graph.internal.node.NodeImpl;
 import org.omnaest.utils.graph.internal.node.NodesImpl;
 import org.omnaest.utils.graph.internal.resolver.GraphResolverImpl;
 import org.omnaest.utils.graph.internal.router.GraphRouterImpl;
+
+import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.SerializerProvider;
 
 /**
  * @see Graph
@@ -73,7 +82,7 @@ public class GraphImpl implements Graph
     }
 
     @Override
-    public GraphRouter newRouter()
+    public GraphRouter routing()
     {
         return new GraphRouterImpl(this);
     }
@@ -103,7 +112,9 @@ public class GraphImpl implements Graph
     @Override
     public String toString()
     {
-        return this.graphIndex.toString();
+        return Optional.ofNullable(this.graphIndex)
+                       .map(GraphIndex::toString)
+                       .orElse(null);
     }
 
     @Override
@@ -119,6 +130,7 @@ public class GraphImpl implements Graph
     {
         GraphIndex clonedGraphIndex = JSONHelper.deserializer(GraphIndex.class)
                                                 .withKeyDeserializer(NodeIdentity.class, new NodeIdentityKeyDeserializer())
+                                                .withExceptionHandler(ExceptionHandler.rethrowingExceptionHandler())
                                                 .apply(json);
         return new GraphImpl(clonedGraphIndex, new NodeResolverSupport(clonedGraphIndex));
     }
@@ -132,8 +144,67 @@ public class GraphImpl implements Graph
             @Override
             public String toJson()
             {
-                return JSONHelper.serialize(graphIndex);
+                return JSONHelper.serializer(GraphIndex.class)
+                                 .withKeySerializer(NodeIdentity.class, new NodeIdentityJsonSerializer())
+                                 .apply(graphIndex);
             }
         };
     }
+
+    @Override
+    public int hashCode()
+    {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + ((this.graphIndex == null) ? 0 : this.graphIndex.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj)
+    {
+        if (this == obj)
+        {
+            return true;
+        }
+        if (obj == null)
+        {
+            return false;
+        }
+        if (this.getClass() != obj.getClass())
+        {
+            return false;
+        }
+        GraphImpl other = (GraphImpl) obj;
+        if (this.graphIndex == null)
+        {
+            if (other.graphIndex != null)
+            {
+                return false;
+            }
+        }
+        else if (!this.graphIndex.equals(other.graphIndex))
+        {
+            return false;
+        }
+        return true;
+    }
+
+    @Override
+    public Optional<Edge> findEdge(NodeIdentity from, NodeIdentity to)
+    {
+        return this.graphIndex.getEdgeAttributes(from, to)
+                              .flatMap(attributes -> OptionalUtils.both(this.findNodeById(from), this.findNodeById(to))
+                                                                  .map(fromAndTo -> new EdgeImpl(fromAndTo.getFirst(), fromAndTo.getSecond(), attributes)));
+    }
+
+    private final class NodeIdentityJsonSerializer extends JsonSerializer<NodeIdentity>
+    {
+        @Override
+        public void serialize(NodeIdentity value, JsonGenerator generator, SerializerProvider serializers) throws IOException
+        {
+            generator.writeFieldName(JSONHelper.serialize(value));
+        }
+    }
+
 }

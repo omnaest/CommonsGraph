@@ -18,9 +18,11 @@ package org.omnaest.utils.graph.domain;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.function.ToDoubleFunction;
 
 import org.omnaest.utils.stream.Streamable;
 
@@ -70,6 +72,51 @@ public interface GraphRouter
          * @return
          */
         public Traversal withAlreadyVisitedNodesHitHandler(TraversalRoutesConsumer routesConsumer);
+
+        public Traversal withWeightedPathTermination(double terminationWeightBarrier, NodeWeightDeterminationFunction nodeWeightDeterminationFunction);
+
+        /**
+         * Similar to {@link #withWeightedPathTermination(double, NodeWeightDeterminationFunction)} which uses a weight scoring function that return a score
+         * inverse to the number of sibling branches. <br>
+         * <br>
+         * In a binary tree as example, all nodes would score to 0.5 * parent.
+         * 
+         * @param terminationWeightBarrier
+         * @return
+         */
+        public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier);
+
+        /**
+         * Similar to {@link #withWeightedPathTerminationByBranches(double)} but allows to specify an {@link IsolatedNodeWeightDeterminationFunction}.
+         * 
+         * @param terminationWeightBarrier
+         * @param nodeWeightDeterminationFunction
+         * @return
+         */
+        public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier,
+                                                               IsolatedNodeWeightDeterminationFunction nodeWeightDeterminationFunction);
+
+        public static interface NodeWeightDeterminationFunction
+        {
+            public double apply(Node node, Route route, OptionalDouble parentWeight);
+        }
+
+        /**
+         * @see #applyAsDouble(Node)
+         * @author omnaest
+         */
+        public static interface IsolatedNodeWeightDeterminationFunction extends ToDoubleFunction<Node>
+        {
+            /**
+             * Determines the isolated weight of a single {@link Node} without any regard to its parent or siblings.
+             * 
+             * @param node
+             * @return
+             */
+            @Override
+            public double applyAsDouble(Node node);
+        }
+
     }
 
     public static interface TraversalRoutesConsumer extends Consumer<Routes>

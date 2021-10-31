@@ -264,6 +264,70 @@ public class GraphUtilsTest
     }
 
     @Test
+    public void testWeightedTraversal() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity intermediateNode4 = NodeIdentity.of("1.4");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        NodeIdentity childNode4 = NodeIdentity.of("1.3.1");
+        NodeIdentity childNode5 = NodeIdentity.of("1.3.2");
+        NodeIdentity childNode6 = NodeIdentity.of("1.3.3");
+        NodeIdentity childNode7 = NodeIdentity.of("1.3.4");
+        NodeIdentity childNode8 = NodeIdentity.of("1.3.5");
+        NodeIdentity leafNode1 = NodeIdentity.of("1.1.1.1");
+        NodeIdentity leafNode2 = NodeIdentity.of("1.1.2.1");
+        NodeIdentity leafNode3 = NodeIdentity.of("1.2.1.1");
+        NodeIdentity leafNode4 = NodeIdentity.of("1.3.1.1");
+        NodeIdentity leafNode5 = NodeIdentity.of("1.3.2.1");
+        NodeIdentity leafNode6 = NodeIdentity.of("1.3.3.1");
+        NodeIdentity leafNode7 = NodeIdentity.of("1.3.4.1");
+        NodeIdentity leafNode8 = NodeIdentity.of("1.3.5.1");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1) // 0.25
+                                .addEdge(rootNode, intermediateNode2) // 0.25
+                                .addEdge(rootNode, intermediateNode3) // 0.25
+                                .addEdge(rootNode, intermediateNode4) // 0.25
+                                .addEdge(intermediateNode1, childNode1) // 0.125
+                                .addEdge(intermediateNode1, childNode2) // 0.125
+                                .addEdge(intermediateNode2, childNode3) // 0.25
+                                .addEdge(intermediateNode3, childNode4) // 0.05
+                                .addEdge(intermediateNode3, childNode5) // 0.05
+                                .addEdge(intermediateNode3, childNode6) // 0.05
+                                .addEdge(intermediateNode3, childNode7) // 0.05
+                                .addEdge(intermediateNode3, childNode8) // 0.05
+                                .addEdge(childNode1, leafNode1)
+                                .addEdge(childNode2, leafNode2)
+                                .addEdge(childNode3, leafNode3)
+                                .addEdge(childNode4, leafNode4) // cut off
+                                .addEdge(childNode5, leafNode5) // cut off
+                                .addEdge(childNode6, leafNode6) // cut off
+                                .addEdge(childNode7, leafNode7) // cut off
+                                .addEdge(childNode8, leafNode8) // cut off
+                                .build();
+
+        assertEquals(Arrays.asList(rootNode, intermediateNode1, intermediateNode2, intermediateNode3, intermediateNode4, childNode1, childNode2, childNode3,
+                                   childNode4, childNode5, childNode6, childNode7, childNode8, leafNode1, leafNode2, leafNode3)
+                           .stream()
+                           .collect(Collectors.toSet()),
+                     graph.routing()
+                          .withBreadthFirst()
+                          .traverseOutgoing()
+                          .withWeightedPathTerminationByBranches(0.1)
+                          .stream()
+                          .flatMap(TraversalRoutes::stream)
+                          .map(RouteAndTraversalControl::get)
+                          .map(Route::last)
+                          .map(Optional::get)
+                          .map(Node::getIdentity)
+                          .collect(Collectors.toSet()));
+    }
+
+    @Test
     public void testTraversalOfCyclicGraph() throws Exception
     {
         NodeIdentity rootNode = NodeIdentity.of("1");

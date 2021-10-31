@@ -22,8 +22,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -35,6 +38,8 @@ import java.util.stream.Stream;
 import org.omnaest.utils.AssertionUtils;
 import org.omnaest.utils.ConsumerUtils;
 import org.omnaest.utils.ListUtils;
+import org.omnaest.utils.MapperUtils;
+import org.omnaest.utils.PeekUtils;
 import org.omnaest.utils.PredicateUtils;
 import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.StreamUtils;
@@ -48,6 +53,7 @@ import org.omnaest.utils.graph.domain.GraphRouter.RouteAndTraversalControl;
 import org.omnaest.utils.graph.domain.GraphRouter.Routes;
 import org.omnaest.utils.graph.domain.GraphRouter.RoutingStrategy;
 import org.omnaest.utils.graph.domain.GraphRouter.Traversal;
+import org.omnaest.utils.graph.domain.GraphRouter.Traversal.NodeWeightDeterminationFunction;
 import org.omnaest.utils.graph.domain.GraphRouter.TraversalRoutes;
 import org.omnaest.utils.graph.domain.GraphRouter.TraversalRoutesConsumer;
 import org.omnaest.utils.graph.domain.Node;
@@ -189,24 +195,108 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     private Traversal traverse(Set<NodeIdentity> startNodes, Function<Node, Stream<Node>> forwardFunction)
     {
         Graph graph = this.graph;
-        return new Traversal()
+        return new TraversalImpl(forwardFunction, graph, startNodes);
+
+    }
+
+    private class TraversalImpl implements Traversal
+    {
+        private final Function<Node, Stream<Node>> forwardFunction;
+        private final Graph                        graph;
+        private final Set<NodeIdentity>            startNodes;
+
+        private final List<TraversalRoutesConsumer>    alreadyVisitedNodesHitHandlers = new ArrayList<>();
+        private final List<WeightedTerminationHandler> weightedTerminationHandlers    = new ArrayList<>();
+
+        private TraversalImpl(Function<Node, Stream<Node>> forwardFunction, Graph graph, Set<NodeIdentity> startNodes)
         {
-            private List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers = new ArrayList<>();
+            this.forwardFunction = forwardFunction;
+            this.graph = graph;
+            this.startNodes = startNodes;
+        }
 
-            @Override
-            public Stream<TraversalRoutes> stream()
-            {
-                return StreamUtils.fromIterator(new BreadthFirstIterator(startNodes, forwardFunction, graph, this.alreadyVisitedNodesHitHandlers))
-                                  .map(TraversalRoutesImpl::new);
-            }
+        @Override
+        public Stream<TraversalRoutes> stream()
+        {
+            return StreamUtils.fromIterator(new BreadthFirstIterator(this.startNodes, this.forwardFunction, this.graph, this.alreadyVisitedNodesHitHandlers))
+                              .map(TraversalRoutesImpl::new)
+                              .map(MapperUtils.identityCast(TraversalRoutes.class))
+                              .peek(PeekUtils.all(this.weightedTerminationHandlers));
+        }
 
-            @Override
-            public Traversal withAlreadyVisitedNodesHitHandler(TraversalRoutesConsumer routesConsumer)
-            {
-                this.alreadyVisitedNodesHitHandlers.add(routesConsumer);
-                return this;
-            }
-        };
+        @Override
+        public Traversal withAlreadyVisitedNodesHitHandler(TraversalRoutesConsumer routesConsumer)
+        {
+            this.alreadyVisitedNodesHitHandlers.add(routesConsumer);
+            return this;
+        }
+
+        @Override
+        public Traversal withWeightedPathTermination(double terminationWeightBarrier, NodeWeightDeterminationFunction nodeWeightDeterminationFunction)
+        {
+            this.weightedTerminationHandlers.add(new WeightedTerminationHandler(terminationWeightBarrier, nodeWeightDeterminationFunction));
+            return this;
+        }
+
+        @Override
+        public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier,
+                                                               IsolatedNodeWeightDeterminationFunction nodeWeightDeterminationFunction)
+        {
+            return this.withWeightedPathTermination(terminationWeightBarrier,
+                                                    (node, route,
+                                                     parentWeight) -> parentWeight.orElse(1.0) * nodeWeightDeterminationFunction.applyAsDouble(node)
+                                                             / Math.max(1.0, route.lastNth(1)
+                                                                                  .map(this.forwardFunction)
+                                                                                  .orElse(Stream.empty())
+                                                                                  .mapToDouble(nodeWeightDeterminationFunction)
+                                                                                  .sum()));
+        }
+
+        @Override
+        public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier)
+        {
+            return this.withWeightedPathTerminationByBranches(terminationWeightBarrier, node -> 1.0);
+        }
+    }
+
+    private static class WeightedTerminationHandler implements Consumer<TraversalRoutes>
+    {
+        private final double                          terminationWeightBarrier;
+        private final NodeWeightDeterminationFunction nodeWeightDeterminationFunction;
+        private Map<NodeIdentity, Double>             nodeIdentityToWeight = new ConcurrentHashMap<>();
+
+        public WeightedTerminationHandler(double terminationWeightBarrier, NodeWeightDeterminationFunction nodeWeightDeterminationFunction)
+        {
+            this.terminationWeightBarrier = terminationWeightBarrier;
+            this.nodeWeightDeterminationFunction = nodeWeightDeterminationFunction;
+        }
+
+        @Override
+        public void accept(TraversalRoutes routes)
+        {
+            routes.stream()
+                  .forEach(routeAndTraversalControl ->
+                  {
+                      Route route = routeAndTraversalControl.get();
+                      route.last()
+                           .ifPresent(node ->
+                           {
+                               OptionalDouble parentWeight = route.lastNth(1)
+                                                                  .map(Node::getIdentity)
+                                                                  .map(this.nodeIdentityToWeight::get)
+                                                                  .map(OptionalDouble::of)
+                                                                  .orElse(OptionalDouble.empty());
+                               NodeIdentity nodeIdentity = node.getIdentity();
+                               double nodeWeight = this.nodeIdentityToWeight.computeIfAbsent(nodeIdentity,
+                                                                                             identity -> this.nodeWeightDeterminationFunction.apply(node, route,
+                                                                                                                                                    parentWeight));
+                               if (nodeWeight < this.terminationWeightBarrier)
+                               {
+                                   routeAndTraversalControl.skip();
+                               }
+                           });
+                  });
+        }
 
     }
 

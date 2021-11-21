@@ -80,4 +80,23 @@ public interface Graph extends Streamable<Node>
      */
     public Optional<Edge> findEdge(NodeIdentity from, NodeIdentity to);
 
+    /**
+     * Creates a {@link SubGraphBuilder} that allows to define a view on top of the current {@link Graph}.
+     * 
+     * @return
+     */
+    public SubGraphBuilder subGraph();
+
+    public static interface SubGraphBuilder
+    {
+        public SubGraphBuilder withExcludedNodes(NodeIdentity... nodeIdentities);
+
+        public SubGraphBuilder withExcludedNodes(Collection<NodeIdentity> nodeIdentities);
+
+        public SubGraphBuilder withIncludedNodes(NodeIdentity... nodeIdentities);
+
+        public SubGraphBuilder withIncludedNodes(Collection<NodeIdentity> nodeIdentities);
+
+        public Graph build();
+    }
 }

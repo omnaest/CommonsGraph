@@ -16,6 +16,7 @@
 package org.omnaest.utils.graph.domain;
 
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.omnaest.utils.graph.domain.GraphBuilder.NodeResolver;
 
@@ -52,6 +53,8 @@ public interface Node
     public Optional<Edge> findOutgoingEdgeTo(NodeIdentity nodeIdentity);
 
     public Optional<Edge> findIncomingEdgeFrom(NodeIdentity nodeIdentity);
+
+    public Stream<Edge> findEdgesTo(NodeIdentity nodeIdentity);
 
     /**
      * Resolves all lazy connections to this {@link Node} using the defined {@link NodeResolver}s of the {@link Graph}

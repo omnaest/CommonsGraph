@@ -16,8 +16,12 @@
 package org.omnaest.utils.graph.internal;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -35,10 +39,13 @@ import org.omnaest.utils.graph.domain.Nodes;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
 import org.omnaest.utils.graph.internal.edge.EdgeImpl;
 import org.omnaest.utils.graph.internal.index.GraphIndex;
+import org.omnaest.utils.graph.internal.index.GraphIndexAccessor;
+import org.omnaest.utils.graph.internal.index.filter.GraphNodesFilter;
 import org.omnaest.utils.graph.internal.node.NodeImpl;
 import org.omnaest.utils.graph.internal.node.NodesImpl;
 import org.omnaest.utils.graph.internal.resolver.GraphResolverImpl;
 import org.omnaest.utils.graph.internal.router.GraphRouterImpl;
+import org.omnaest.utils.graph.internal.serialization.NodeIdentityKeyDeserializer;
 
 import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.databind.JsonSerializer;
@@ -50,34 +57,34 @@ import com.fasterxml.jackson.databind.SerializerProvider;
  */
 public class GraphImpl implements Graph
 {
-    private GraphIndex          graphIndex;
     private NodeResolverSupport nodeResolverSupport;
+    private GraphIndexAccessor  graphIndexAccessor;
 
-    public GraphImpl(GraphIndex graphIndex, NodeResolverSupport nodeResolverSupport)
+    public GraphImpl(GraphIndex graphIndex, NodeResolverSupport nodeResolverSupport, GraphNodesFilter graphNodesFilter)
     {
         super();
-        this.graphIndex = graphIndex;
         this.nodeResolverSupport = nodeResolverSupport;
+        this.graphIndexAccessor = new GraphIndexAccessor(graphIndex, graphNodesFilter);
     }
 
     @Override
     public Stream<Node> stream()
     {
-        return this.graphIndex.getNodes()
-                              .stream()
-                              .map(this::wrapIntoNode);
+        return this.graphIndexAccessor.getNodes()
+                                      .stream()
+                                      .map(this::wrapIntoNode);
     }
 
     private Node wrapIntoNode(NodeIdentity nodeIdentity)
     {
-        return new NodeImpl(nodeIdentity, this.graphIndex, this.nodeResolverSupport);
+        return new NodeImpl(nodeIdentity, this.graphIndexAccessor, this.nodeResolverSupport);
     }
 
     @Override
     public Optional<Node> findNodeById(NodeIdentity nodeIdentity)
     {
         return Optional.ofNullable(nodeIdentity)
-                       .filter(this.graphIndex::containsNode)
+                       .filter(this.graphIndexAccessor::containsNode)
                        .map(this::wrapIntoNode);
     }
 
@@ -90,30 +97,30 @@ public class GraphImpl implements Graph
     @Override
     public int size()
     {
-        return this.graphIndex.getNodes()
-                              .size();
+        return this.graphIndexAccessor.getNodes()
+                                      .size();
     }
 
     @Override
     public Nodes findNodesByIds(Collection<NodeIdentity> nodeIdentities)
     {
         return new NodesImpl(nodeIdentities.stream()
-                                           .filter(this.graphIndex::containsNode)
+                                           .filter(this.graphIndexAccessor::containsNode)
                                            .collect(Collectors.toSet()),
-                             this.graphIndex, this.nodeResolverSupport);
+                             this.graphIndexAccessor, this.nodeResolverSupport);
     }
 
     @Override
     public GraphResolver resolver()
     {
-        return new GraphResolverImpl(this.graphIndex, this.nodeResolverSupport);
+        return new GraphResolverImpl(this.graphIndexAccessor, this.nodeResolverSupport);
     }
 
     @Override
     public String toString()
     {
-        return Optional.ofNullable(this.graphIndex)
-                       .map(GraphIndex::toString)
+        return Optional.ofNullable(this.graphIndexAccessor)
+                       .map(GraphIndexAccessor::toString)
                        .orElse(null);
     }
 
@@ -122,8 +129,8 @@ public class GraphImpl implements Graph
     {
         GraphIndex clonedGraphIndex = JSONHelper.<GraphIndex>cloner()
                                                 .usingKeyDeserializer(NodeIdentity.class, new NodeIdentityKeyDeserializer())
-                                                .apply(this.graphIndex);
-        return new GraphImpl(clonedGraphIndex, new NodeResolverSupport(clonedGraphIndex));
+                                                .apply(this.graphIndexAccessor.getGraphIndex());
+        return new GraphImpl(clonedGraphIndex, new NodeResolverSupport(clonedGraphIndex), this.graphIndexAccessor.getGraphNodesFilter());
     }
 
     public static Graph fromJson(String json)
@@ -132,13 +139,13 @@ public class GraphImpl implements Graph
                                                 .withKeyDeserializer(NodeIdentity.class, new NodeIdentityKeyDeserializer())
                                                 .withExceptionHandler(ExceptionHandler.rethrowingExceptionHandler())
                                                 .apply(json);
-        return new GraphImpl(clonedGraphIndex, new NodeResolverSupport(clonedGraphIndex));
+        return new GraphImpl(clonedGraphIndex, new NodeResolverSupport(clonedGraphIndex), GraphNodesFilter.empty());
     }
 
     @Override
     public GraphSerializer serialize()
     {
-        GraphIndex graphIndex = this.graphIndex;
+        GraphIndex graphIndex = this.graphIndexAccessor.getGraphIndex();
         return new GraphSerializer()
         {
             @Override
@@ -156,7 +163,7 @@ public class GraphImpl implements Graph
     {
         final int prime = 31;
         int result = 1;
-        result = prime * result + ((this.graphIndex == null) ? 0 : this.graphIndex.hashCode());
+        result = prime * result + ((this.graphIndexAccessor == null) ? 0 : this.graphIndexAccessor.hashCode());
         return result;
     }
 
@@ -171,19 +178,19 @@ public class GraphImpl implements Graph
         {
             return false;
         }
-        if (this.getClass() != obj.getClass())
+        if (!(obj instanceof GraphImpl))
         {
             return false;
         }
         GraphImpl other = (GraphImpl) obj;
-        if (this.graphIndex == null)
+        if (this.graphIndexAccessor == null)
         {
-            if (other.graphIndex != null)
+            if (other.graphIndexAccessor != null)
             {
                 return false;
             }
         }
-        else if (!this.graphIndex.equals(other.graphIndex))
+        else if (!this.graphIndexAccessor.equals(other.graphIndexAccessor))
         {
             return false;
         }
@@ -193,9 +200,10 @@ public class GraphImpl implements Graph
     @Override
     public Optional<Edge> findEdge(NodeIdentity from, NodeIdentity to)
     {
-        return this.graphIndex.getEdgeAttributes(from, to)
-                              .flatMap(attributes -> OptionalUtils.both(this.findNodeById(from), this.findNodeById(to))
-                                                                  .map(fromAndTo -> new EdgeImpl(fromAndTo.getFirst(), fromAndTo.getSecond(), attributes)));
+        return this.graphIndexAccessor.getEdgeAttributes(from, to)
+                                      .flatMap(attributes -> OptionalUtils.both(this.findNodeById(from), this.findNodeById(to))
+                                                                          .map(fromAndTo -> new EdgeImpl(fromAndTo.getFirst(), fromAndTo.getSecond(),
+                                                                                                         attributes)));
     }
 
     private final class NodeIdentityJsonSerializer extends JsonSerializer<NodeIdentity>
@@ -205,6 +213,51 @@ public class GraphImpl implements Graph
         {
             generator.writeFieldName(JSONHelper.serialize(value));
         }
+    }
+
+    @Override
+    public SubGraphBuilder subGraph()
+    {
+        return new SubGraphBuilder()
+        {
+            private Set<NodeIdentity> excludedNodes = new HashSet<>();
+            private Set<NodeIdentity> includedNodes = new HashSet<>();
+
+            @Override
+            public SubGraphBuilder withExcludedNodes(Collection<NodeIdentity> nodeIdentities)
+            {
+                this.excludedNodes.addAll(Optional.ofNullable(nodeIdentities)
+                                                  .orElse(Collections.emptyList()));
+                return this;
+            }
+
+            @Override
+            public SubGraphBuilder withExcludedNodes(NodeIdentity... nodeIdentities)
+            {
+                return this.withExcludedNodes(Arrays.asList(nodeIdentities));
+            }
+
+            @Override
+            public SubGraphBuilder withIncludedNodes(Collection<NodeIdentity> nodeIdentities)
+            {
+                this.includedNodes.addAll(Optional.ofNullable(nodeIdentities)
+                                                  .orElse(Collections.emptyList()));
+                return this;
+            }
+
+            @Override
+            public SubGraphBuilder withIncludedNodes(NodeIdentity... nodeIdentities)
+            {
+                return this.withIncludedNodes(Arrays.asList(nodeIdentities));
+            }
+
+            @Override
+            public Graph build()
+            {
+                return new GraphImpl(GraphImpl.this.graphIndexAccessor.getGraphIndex(), GraphImpl.this.nodeResolverSupport,
+                                     new GraphNodesFilter(this.excludedNodes, this.includedNodes));
+            }
+        };
     }
 
 }

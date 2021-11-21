@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.ToDoubleFunction;
 
@@ -32,6 +33,31 @@ public interface GraphRouter
 
     public static interface RoutingStrategy
     {
+        /**
+         * {@link Predicate} for {@link Edge}s
+         * 
+         * @author omnaest
+         */
+        public static interface EdgeFilter extends Predicate<Edge>
+        {
+        }
+
+        /**
+         * Adds a static {@link EdgeFilter}
+         * 
+         * @param edgeFilter
+         * @return
+         */
+        public RoutingStrategy withEdgeFilter(EdgeFilter edgeFilter);
+
+        /**
+         * Similar to {@link #withEdgeFilter(EdgeFilter)} with a special filter that excludes {@link Edge}s with any of the given {@link Tag}
+         * 
+         * @param tag
+         * @return
+         */
+        public RoutingStrategy withExcludingEdgeByTagFilter(Tag... tag);
+
         public Routes findAllOutgoingRoutesBetween(NodeIdentity from, NodeIdentity to);
 
         public Routes findAllIncomingRoutesBetween(NodeIdentity from, NodeIdentity to);
@@ -96,6 +122,15 @@ public interface GraphRouter
         public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier,
                                                                IsolatedNodeWeightDeterminationFunction nodeWeightDeterminationFunction);
 
+        /**
+         * @see #withWeightedPathTermination(double, NodeWeightDeterminationFunction)
+         * @param terminationWeightBarrier
+         * @param nodeWeightByRouteDeterminationFunction
+         * @return
+         */
+        public Traversal withWeightedPathTerminationByBranchesAndRoute(double terminationWeightBarrier,
+                                                                       IsolatedNodeWeightByRouteDeterminationFunction nodeWeightByRouteDeterminationFunction);
+
         public static interface NodeWeightDeterminationFunction
         {
             public double apply(Node node, Route route, OptionalDouble parentWeight);
@@ -117,6 +152,22 @@ public interface GraphRouter
             public double applyAsDouble(Node node);
         }
 
+        /**
+         * @see #applyAsDouble(Route)
+         * @author omnaest
+         */
+        public static interface IsolatedNodeWeightByRouteDeterminationFunction extends ToDoubleFunction<Route>
+        {
+            /**
+             * Determines the isolated weight of a single {@link Route}.
+             * 
+             * @param node
+             * @return
+             */
+            @Override
+            public double applyAsDouble(Route node);
+        }
+
     }
 
     public static interface TraversalRoutesConsumer extends Consumer<Routes>
@@ -125,7 +176,17 @@ public interface GraphRouter
 
     public static enum Direction
     {
-        OUTGOING, INCOMING
+        OUTGOING, INCOMING;
+
+        /**
+         * Returns the inverse {@link Direction}
+         * 
+         * @return
+         */
+        public Direction inverse()
+        {
+            return OUTGOING.equals(this) ? Direction.INCOMING : Direction.OUTGOING;
+        }
     }
 
     public static interface TraversalRoutes extends Streamable<RouteAndTraversalControl>
@@ -216,6 +277,14 @@ public interface GraphRouter
          * @return
          */
         public Route addToNew(NodeIdentity nodeIdentity);
+
+        /**
+         * Returns a sub {@link Route} until the nth last {@link Node}
+         * 
+         * @param index
+         * @return
+         */
+        public Route getSubRouteUntilLastNth(int index);
     }
 
 }

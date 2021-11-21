@@ -148,4 +148,10 @@ public class RouteImpl implements Route
                         .map(this.createNodeIdentityToNodeMapper());
     }
 
+    @Override
+    public Route getSubRouteUntilLastNth(int index)
+    {
+        return new RouteImpl(ListUtils.sublist(this.route, 0, this.route.size() - 1), this.graph);
+    }
+
 }

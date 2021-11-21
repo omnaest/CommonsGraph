@@ -2,17 +2,17 @@ package org.omnaest.utils.graph.internal.resolver;
 
 import org.omnaest.utils.graph.domain.GraphResolver;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
-import org.omnaest.utils.graph.internal.index.GraphIndex;
+import org.omnaest.utils.graph.internal.index.GraphIndexAccessor;
 
 public class GraphResolverImpl implements GraphResolver
 {
-    private final GraphIndex          graphIndex;
+    private final GraphIndexAccessor  graphIndexAccessor;
     private final NodeResolverSupport nodeResolverSupport;
     private int                       depthLimit = Integer.MAX_VALUE;
 
-    public GraphResolverImpl(GraphIndex graphIndex, NodeResolverSupport nodeResolverSupport)
+    public GraphResolverImpl(GraphIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
     {
-        this.graphIndex = graphIndex;
+        this.graphIndexAccessor = graphIndexAccessor;
         this.nodeResolverSupport = nodeResolverSupport;
     }
 
@@ -20,9 +20,9 @@ public class GraphResolverImpl implements GraphResolver
     public GraphResolver resolveAll()
     {
         int depth = 0;
-        while (this.graphIndex.hasUnresolvedNodes() && depth < this.depthLimit)
+        while (this.graphIndexAccessor.hasUnresolvedNodes() && depth < this.depthLimit)
         {
-            this.nodeResolverSupport.resolve(this.graphIndex.getUnresolvedNodes());
+            this.nodeResolverSupport.resolve(this.graphIndexAccessor.getUnresolvedNodes());
             depth++;
         }
         return this;

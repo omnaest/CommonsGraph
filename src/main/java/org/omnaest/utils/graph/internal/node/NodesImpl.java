@@ -23,18 +23,18 @@ import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Nodes;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
-import org.omnaest.utils.graph.internal.index.GraphIndex;
+import org.omnaest.utils.graph.internal.index.GraphIndexAccessor;
 
 public class NodesImpl implements Nodes
 {
     private final Set<NodeIdentity>   nodeIdentities;
-    private final GraphIndex          graphIndex;
+    private final GraphIndexAccessor  graphIndexAccessor;
     private final NodeResolverSupport nodeResolverSupport;
 
-    public NodesImpl(Set<NodeIdentity> nodeIdentities, GraphIndex graphIndex, NodeResolverSupport nodeResolverSupport)
+    public NodesImpl(Set<NodeIdentity> nodeIdentities, GraphIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
     {
         this.nodeIdentities = nodeIdentities;
-        this.graphIndex = graphIndex;
+        this.graphIndexAccessor = graphIndexAccessor;
         this.nodeResolverSupport = nodeResolverSupport;
     }
 
@@ -47,7 +47,7 @@ public class NodesImpl implements Nodes
 
     private NodeImpl wrapIntoNode(NodeIdentity nodeIdentity)
     {
-        return new NodeImpl(nodeIdentity, this.graphIndex, this.nodeResolverSupport);
+        return new NodeImpl(nodeIdentity, this.graphIndexAccessor, this.nodeResolverSupport);
     }
 
     @Override

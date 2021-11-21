@@ -1,4 +1,4 @@
-package org.omnaest.utils.graph.internal;
+package org.omnaest.utils.graph.internal.serialization;
 
 import java.io.IOException;
 

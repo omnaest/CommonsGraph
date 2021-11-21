@@ -1,12 +1,12 @@
 package org.omnaest.utils.graph.internal.edge;
 
-import java.util.Arrays;
-import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
 import org.omnaest.utils.SetUtils;
+import org.omnaest.utils.element.bi.UnaryBiElement;
 import org.omnaest.utils.graph.domain.Attribute;
 import org.omnaest.utils.graph.domain.Edge;
 import org.omnaest.utils.graph.domain.Node;
@@ -45,9 +45,9 @@ public class EdgeImpl implements Edge
     }
 
     @Override
-    public List<NodeIdentity> getNodeIdentities()
+    public UnaryBiElement<NodeIdentity> getNodeIdentities()
     {
-        return Arrays.asList(this.from.getIdentity(), this.to.getIdentity());
+        return UnaryBiElement.of(this.from.getIdentity(), this.to.getIdentity());
     }
 
     @Override
@@ -62,4 +62,14 @@ public class EdgeImpl implements Edge
     {
         return tag != null && this.attributes.contains(tag);
     }
+
+    @Override
+    public boolean hasAnyTag(Tag... tags)
+    {
+        return Optional.ofNullable(tags)
+                       .map(Stream::of)
+                       .orElse(Stream.empty())
+                       .anyMatch(this::hasTag);
+    }
+
 }

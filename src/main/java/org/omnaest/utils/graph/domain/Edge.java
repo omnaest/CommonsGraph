@@ -1,8 +1,9 @@
 package org.omnaest.utils.graph.domain;
 
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
+
+import org.omnaest.utils.element.bi.UnaryBiElement;
 
 /**
  * {@link Edge} between a source and target {@link Node} in a {@link Graph}
@@ -18,7 +19,7 @@ public interface Edge
      * 
      * @return
      */
-    public List<NodeIdentity> getNodeIdentities();
+    public UnaryBiElement<NodeIdentity> getNodeIdentities();
 
     public Stream<Attribute> getAttributesByKey(String key);
 
@@ -43,4 +44,12 @@ public interface Edge
      * @return
      */
     public boolean hasTag(Tag tag);
+
+    /**
+     * Returns true, if the any of the given {@link Tag}s is present
+     * 
+     * @param tags
+     * @return
+     */
+    public boolean hasAnyTag(Tag... tags);
 }

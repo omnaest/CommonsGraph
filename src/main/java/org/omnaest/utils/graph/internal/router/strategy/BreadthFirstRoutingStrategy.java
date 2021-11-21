@@ -28,9 +28,11 @@ import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -39,11 +41,13 @@ import org.omnaest.utils.AssertionUtils;
 import org.omnaest.utils.ConsumerUtils;
 import org.omnaest.utils.ListUtils;
 import org.omnaest.utils.MapperUtils;
+import org.omnaest.utils.OptionalUtils;
 import org.omnaest.utils.PeekUtils;
 import org.omnaest.utils.PredicateUtils;
 import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.StreamUtils;
 import org.omnaest.utils.element.bi.BiElement;
+import org.omnaest.utils.element.bi.UnaryBiElement;
 import org.omnaest.utils.element.cached.CachedElement;
 import org.omnaest.utils.graph.domain.Edge;
 import org.omnaest.utils.graph.domain.Graph;
@@ -64,8 +68,25 @@ import org.omnaest.utils.graph.internal.router.route.RouteImpl;
 
 public class BreadthFirstRoutingStrategy implements RoutingStrategy
 {
-    private Graph   graph;
-    private boolean enableNodeResolving = true;
+    private Graph            graph;
+    private boolean          enableNodeResolving = true;
+    private List<EdgeFilter> edgeFilters         = new ArrayList<>();
+
+    @Override
+    public BreadthFirstRoutingStrategy withEdgeFilter(EdgeFilter edgeFilter)
+    {
+        if (edgeFilter != null)
+        {
+            this.edgeFilters.add(edgeFilter);
+        }
+        return this;
+    }
+
+    @Override
+    public RoutingStrategy withExcludingEdgeByTagFilter(Tag... tag)
+    {
+        return this.withEdgeFilter(edge -> !edge.hasAnyTag(tag));
+    }
 
     public BreadthFirstRoutingStrategy(Graph graph)
     {
@@ -88,20 +109,16 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     @Override
     public Routes findAllIncomingRoutesBetween(NodeIdentity from, NodeIdentity to)
     {
-        Function<Node, Stream<Node>> forwardFunction = node -> node.getIncomingNodes()
-                                                                   .stream();
-        return this.findAllRoutesBetween(from, to, forwardFunction);
+        return this.findAllRoutesBetween(from, to, ForwardFunctions.INCOMING);
     }
 
     @Override
     public Routes findAllOutgoingRoutesBetween(NodeIdentity from, NodeIdentity to)
     {
-        Function<Node, Stream<Node>> forwardFunction = node -> node.getOutgoingNodes()
-                                                                   .stream();
-        return this.findAllRoutesBetween(from, to, forwardFunction);
+        return this.findAllRoutesBetween(from, to, ForwardFunctions.OUTGOING);
     }
 
-    public Routes findAllRoutesBetween(NodeIdentity from, NodeIdentity to, Function<Node, Stream<Node>> forwardFunction)
+    private Routes findAllRoutesBetween(NodeIdentity from, NodeIdentity to, ForwardFunctionsProvider forwardFunctions)
     {
         Optional<Node> startNode = this.graph.findNodeById(from);
         List<Route> routes = new ArrayList<>();
@@ -124,7 +141,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                 Set<NodeIdentity> currentNodes = this.determineNodesFrom(currentNodeAndPaths);
                 visitedNodes.addAll(currentNodes);
                 this.resolveUnresolvedNodesIfEnabled(currentNodes);
-                currentNodeAndPaths = this.determineNextNodes(forwardFunction, currentNodeAndPaths, visitedNodes, SkipNodes.empty(),
+                currentNodeAndPaths = this.determineNextNodes(forwardFunctions, currentNodeAndPaths, visitedNodes, SkipNodes.empty(),
                                                               ConsumerUtils.noOperation());
                 routes.addAll(this.determineRoutesByMatchingNodes(this.graph.findNodeById(to), currentNodeAndPaths));
             }
@@ -142,8 +159,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     @Override
     public Traversal traverseOutgoing(Set<NodeIdentity> startNodes)
     {
-        return this.traverse(startNodes, node -> node.getOutgoingNodes()
-                                                     .stream());
+        return this.traverse(startNodes, ForwardFunctions.OUTGOING);
 
     }
 
@@ -168,8 +184,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     @Override
     public Traversal traverseIncoming(Set<NodeIdentity> startNodes)
     {
-        return this.traverse(startNodes, node -> node.getIncomingNodes()
-                                                     .stream());
+        return this.traverse(startNodes, ForwardFunctions.INCOMING);
     }
 
     @Override
@@ -192,23 +207,66 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
     }
 
-    private Traversal traverse(Set<NodeIdentity> startNodes, Function<Node, Stream<Node>> forwardFunction)
+    private Traversal traverse(Set<NodeIdentity> startNodes, ForwardFunctionsProvider forwardFunction)
     {
         Graph graph = this.graph;
         return new TraversalImpl(forwardFunction, graph, startNodes);
 
     }
 
+    private static interface ForwardFunctionsProvider
+    {
+        public ForwardNodeFunction forwardNodeFunction();
+
+        public ForwardEdgeFunction forwardEdgeFunction();
+    }
+
+    private static interface ForwardNodeFunction extends Function<Node, Nodes>
+    {
+    }
+
+    private static interface ForwardEdgeFunction extends BiFunction<Node, Node, Optional<Edge>>
+    {
+    }
+
+    private static enum ForwardFunctions implements ForwardFunctionsProvider
+    {
+        OUTGOING(node -> node.getOutgoingNodes(), (from, to) -> from.findOutgoingEdgeTo(to.getIdentity())),
+        INCOMING(node -> node.getIncomingNodes(), (from, to) -> from.findIncomingEdgeFrom(to.getIdentity()));
+
+        private ForwardNodeFunction forwardNodeFunction;
+        private ForwardEdgeFunction forwardEdgeFunction;
+
+        private ForwardFunctions(ForwardNodeFunction forwardNodeFunction, ForwardEdgeFunction forwardEdgeFunction)
+        {
+            this.forwardNodeFunction = forwardNodeFunction;
+            this.forwardEdgeFunction = forwardEdgeFunction;
+
+        }
+
+        @Override
+        public ForwardNodeFunction forwardNodeFunction()
+        {
+            return this.forwardNodeFunction;
+        }
+
+        @Override
+        public ForwardEdgeFunction forwardEdgeFunction()
+        {
+            return this.forwardEdgeFunction;
+        }
+    }
+
     private class TraversalImpl implements Traversal
     {
-        private final Function<Node, Stream<Node>> forwardFunction;
-        private final Graph                        graph;
-        private final Set<NodeIdentity>            startNodes;
+        private final ForwardFunctionsProvider forwardFunction;
+        private final Graph                    graph;
+        private final Set<NodeIdentity>        startNodes;
 
         private final List<TraversalRoutesConsumer>    alreadyVisitedNodesHitHandlers = new ArrayList<>();
         private final List<WeightedTerminationHandler> weightedTerminationHandlers    = new ArrayList<>();
 
-        private TraversalImpl(Function<Node, Stream<Node>> forwardFunction, Graph graph, Set<NodeIdentity> startNodes)
+        private TraversalImpl(ForwardFunctionsProvider forwardFunction, Graph graph, Set<NodeIdentity> startNodes)
         {
             this.forwardFunction = forwardFunction;
             this.graph = graph;
@@ -242,13 +300,26 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier,
                                                                IsolatedNodeWeightDeterminationFunction nodeWeightDeterminationFunction)
         {
+            return this.withWeightedPathTerminationByBranchesAndRoute(terminationWeightBarrier, route -> route.last()
+                                                                                                              .map(nodeWeightDeterminationFunction::applyAsDouble)
+                                                                                                              .orElse(1.0));
+        }
+
+        @Override
+        public Traversal withWeightedPathTerminationByBranchesAndRoute(double terminationWeightBarrier,
+                                                                       IsolatedNodeWeightByRouteDeterminationFunction nodeWeightByRouteDeterminationFunction)
+        {
             return this.withWeightedPathTermination(terminationWeightBarrier,
                                                     (node, route,
-                                                     parentWeight) -> parentWeight.orElse(1.0) * nodeWeightDeterminationFunction.applyAsDouble(node)
+                                                     parentWeight) -> parentWeight.orElse(1.0) * nodeWeightByRouteDeterminationFunction.applyAsDouble(route)
                                                              / Math.max(1.0, route.lastNth(1)
-                                                                                  .map(this.forwardFunction)
+                                                                                  .map(this.forwardFunction.forwardNodeFunction())
+                                                                                  .map(Nodes::stream)
                                                                                   .orElse(Stream.empty())
-                                                                                  .mapToDouble(nodeWeightDeterminationFunction)
+                                                                                  .map(Node::getIdentity)
+                                                                                  .map(nodeIdentity -> route.getSubRouteUntilLastNth(1)
+                                                                                                            .addToNew(nodeIdentity))
+                                                                                  .mapToDouble(nodeWeightByRouteDeterminationFunction)
                                                                                   .sum()));
         }
 
@@ -357,18 +428,21 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                            .collect(Collectors.toList());
     }
 
-    private List<NodeAndPath> determineNextNodes(Function<Node, Stream<Node>> forwardFunction, List<NodeAndPath> currentNodes, Set<NodeIdentity> visitedNodes,
+    private List<NodeAndPath> determineNextNodes(ForwardFunctionsProvider forwardFunctions, List<NodeAndPath> currentNodes, Set<NodeIdentity> visitedNodes,
                                                  SkipNodes skipNodes, Consumer<Set<NodeAndPath>> visitedNodesHitConsumer)
     {
         Set<NodeAndPath> visitedNodesHitPaths = new HashSet<>();
         List<NodeAndPath> result = currentNodes.stream()
                                                .filter(skipNodes::matchesNot)
-                                               .flatMap(nodeAndPath -> forwardFunction.apply(nodeAndPath.getNode())
-                                                                                      .filter(PredicateUtils.isCollectionNotContaining(visitedNodes)
-                                                                                                            .from(Node::getIdentity)
-                                                                                                            .ifFalseThen(excludedNode -> visitedNodesHitPaths.add(nodeAndPath.append(excludedNode))))
-                                                                                      .map(nodeAndPath::append))
+                                               .flatMap(nodeAndPath -> forwardFunctions.forwardNodeFunction()
+                                                                                       .apply(nodeAndPath.getNode())
+                                                                                       .stream()
+                                                                                       .filter(PredicateUtils.isCollectionNotContaining(visitedNodes)
+                                                                                                             .from(Node::getIdentity)
+                                                                                                             .ifFalseThen(excludedNode -> visitedNodesHitPaths.add(nodeAndPath.append(excludedNode))))
+                                                                                       .map(nodeAndPath::append))
                                                .filter(skipNodes::matchesNot)
+                                               .filter(this.createEdgesFilter(forwardFunctions.forwardEdgeFunction()))
                                                .collect(Collectors.toList());
 
         if (!visitedNodesHitPaths.isEmpty())
@@ -377,6 +451,29 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
 
         return result;
+    }
+
+    private Predicate<NodeAndPath> createEdgesFilter(BiFunction<Node, Node, Optional<Edge>> edgesFunction)
+    {
+        List<EdgeFilter> edgeFilters = this.edgeFilters;
+        if (edgeFilters.isEmpty())
+        {
+            return nodeAndPath -> true;
+        }
+        else
+        {
+            return nodeAndPath ->
+            {
+                Optional<Node> currentNode = ListUtils.optionalLast(nodeAndPath.getFullPath());
+                Optional<Node> previousNode = ListUtils.optionalLast(nodeAndPath.getFullPath(), 1);
+
+                return OptionalUtils.both(previousNode, currentNode)
+                                    .flatMap(fromAndTo -> edgesFunction.apply(fromAndTo.getFirst(), fromAndTo.getSecond()))
+                                    .map(edge -> PredicateUtils.all(edgeFilters)
+                                                               .test(edge))
+                                    .orElse(true);
+            };
+        }
     }
 
     private static class SkipNodes
@@ -452,6 +549,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                   .findAllEdgesWithTag(tag)
                                                   .stream()
                                                   .map(Edge::getNodeIdentities)
+                                                  .map(UnaryBiElement::asList)
                                                   .flatMap(List::stream)
                                                   .collect(Collectors.toSet()));
                 return this;
@@ -518,7 +616,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         private final CachedElement<RoutesControl> currentRoutesControl;
         private final AtomicLong                   counter = new AtomicLong();
 
-        private BreadthFirstIterator(Set<NodeIdentity> startNodes, Function<Node, Stream<Node>> forwardFunction, Graph graph,
+        private BreadthFirstIterator(Set<NodeIdentity> startNodes, ForwardFunctionsProvider forwardFunctions, Graph graph,
                                      List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers)
         {
             List<NodeAndPath> startNodeAndPaths = Optional.ofNullable(startNodes)
@@ -530,7 +628,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                           .map(NodeAndPath::of)
                                                           .collect(Collectors.toList());
             SkipNodes skipNodes = new SkipNodes();
-            this.currentRoutesControl = CachedElement.of(new BreadthFirstSupplier(startNodeAndPaths, forwardFunction, this.counter, skipNodes,
+            this.currentRoutesControl = CachedElement.of(new BreadthFirstSupplier(startNodeAndPaths, forwardFunctions, this.counter, skipNodes,
                                                                                   alreadyVisitedNodesHitHandlers))
                                                      .set(new RoutesControl(new RoutesImpl(BreadthFirstRoutingStrategy.this.wrapMatchingNodeAndPathsIntoRoutes(startNodeAndPaths)),
                                                                             skipNodes, this.counter.incrementAndGet(), () -> this.counter.get()));
@@ -552,7 +650,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
         private final class BreadthFirstSupplier implements Supplier<RoutesControl>
         {
-            private final Function<Node, Stream<Node>>  forwardFunction;
+            private final ForwardFunctionsProvider      forwardFunctions;
             private final Set<NodeIdentity>             visitedNodes = new HashSet<>();
             private final SkipNodes                     skipNodes;
             private final AtomicLong                    counter;
@@ -560,10 +658,10 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
             private List<NodeAndPath> currentNodeAndPaths;
 
-            private BreadthFirstSupplier(List<NodeAndPath> startNodeAndPaths, Function<Node, Stream<Node>> forwardFunction, AtomicLong counter,
+            private BreadthFirstSupplier(List<NodeAndPath> startNodeAndPaths, ForwardFunctionsProvider forwardFunctions, AtomicLong counter,
                                          SkipNodes skipNodes, List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers)
             {
-                this.forwardFunction = forwardFunction;
+                this.forwardFunctions = forwardFunctions;
                 this.currentNodeAndPaths = startNodeAndPaths;
                 this.counter = counter;
                 this.skipNodes = skipNodes;
@@ -576,7 +674,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                 Set<NodeIdentity> currentNodes = BreadthFirstRoutingStrategy.this.determineNodesFrom(this.currentNodeAndPaths);
                 this.visitedNodes.addAll(currentNodes);
                 BreadthFirstRoutingStrategy.this.resolveUnresolvedNodesIfEnabled(currentNodes);
-                this.currentNodeAndPaths = BreadthFirstRoutingStrategy.this.determineNextNodes(this.forwardFunction, this.currentNodeAndPaths,
+                this.currentNodeAndPaths = BreadthFirstRoutingStrategy.this.determineNextNodes(this.forwardFunctions, this.currentNodeAndPaths,
                                                                                                this.visitedNodes, this.skipNodes,
                                                                                                this.createVisitedNodesHitConsumer());
                 List<Route> routes = BreadthFirstRoutingStrategy.this.wrapMatchingNodeAndPathsIntoRoutes(this.currentNodeAndPaths);

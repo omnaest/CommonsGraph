@@ -31,7 +31,7 @@ import org.omnaest.utils.graph.domain.Tag;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
 import org.omnaest.utils.graph.internal.edge.EdgeImpl;
 import org.omnaest.utils.graph.internal.edge.EdgesImpl;
-import org.omnaest.utils.graph.internal.index.GraphIndex;
+import org.omnaest.utils.graph.internal.index.GraphIndexAccessor;
 
 /**
  * @see Node
@@ -40,13 +40,13 @@ import org.omnaest.utils.graph.internal.index.GraphIndex;
 public class NodeImpl implements Node
 {
     private final NodeIdentity        nodeIdentity;
-    private final GraphIndex          graphIndex;
+    private final GraphIndexAccessor  graphIndexAccessor;
     private final NodeResolverSupport nodeResolverSupport;
 
-    public NodeImpl(NodeIdentity nodeIdentity, GraphIndex graphIndex, NodeResolverSupport nodeResolverSupport)
+    public NodeImpl(NodeIdentity nodeIdentity, GraphIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
     {
         this.nodeIdentity = nodeIdentity;
-        this.graphIndex = graphIndex;
+        this.graphIndexAccessor = graphIndexAccessor;
         this.nodeResolverSupport = nodeResolverSupport;
     }
 
@@ -59,13 +59,13 @@ public class NodeImpl implements Node
     @Override
     public Nodes getOutgoingNodes()
     {
-        return new NodesImpl(this.graphIndex.getOutgoingNodes(this.nodeIdentity), this.graphIndex, this.nodeResolverSupport);
+        return new NodesImpl(this.graphIndexAccessor.getOutgoingNodes(this.nodeIdentity), this.graphIndexAccessor, this.nodeResolverSupport);
     }
 
     @Override
     public Nodes getIncomingNodes()
     {
-        return new NodesImpl(this.graphIndex.getIncomingNodes(this.nodeIdentity), this.graphIndex, this.nodeResolverSupport);
+        return new NodesImpl(this.graphIndexAccessor.getIncomingNodes(this.nodeIdentity), this.graphIndexAccessor, this.nodeResolverSupport);
     }
 
     @Override
@@ -113,8 +113,8 @@ public class NodeImpl implements Node
                                  {
                                      Node from = this;
                                      Node to = node;
-                                     Set<Attribute> attributes = this.graphIndex.getEdgeAttributes(from.getIdentity(), to.getIdentity())
-                                                                                .orElse(Collections.emptySet());
+                                     Set<Attribute> attributes = this.graphIndexAccessor.getEdgeAttributes(from.getIdentity(), to.getIdentity())
+                                                                                        .orElse(Collections.emptySet());
 
                                      return new EdgeImpl(from, to, attributes);
                                  })
@@ -130,8 +130,8 @@ public class NodeImpl implements Node
                                  {
                                      Node from = node;
                                      Node to = this;
-                                     Set<Attribute> attributes = this.graphIndex.getEdgeAttributes(from.getIdentity(), to.getIdentity())
-                                                                                .orElse(Collections.emptySet());
+                                     Set<Attribute> attributes = this.graphIndexAccessor.getEdgeAttributes(from.getIdentity(), to.getIdentity())
+                                                                                        .orElse(Collections.emptySet());
 
                                      return new EdgeImpl(from, to, attributes);
                                  })
@@ -160,13 +160,13 @@ public class NodeImpl implements Node
     @Override
     public Optional<Edge> findOutgoingEdgeTo(NodeIdentity nodeIdentity)
     {
-        if (this.graphIndex.getOutgoingNodes(this.nodeIdentity)
-                           .contains(nodeIdentity))
+        if (this.graphIndexAccessor.getOutgoingNodes(this.nodeIdentity)
+                                   .contains(nodeIdentity))
         {
             Node from = this;
-            Node to = new NodeImpl(nodeIdentity, this.graphIndex, this.nodeResolverSupport);
-            Set<Attribute> attributes = this.graphIndex.getEdgeAttributes(from.getIdentity(), to.getIdentity())
-                                                       .orElse(Collections.emptySet());
+            Node to = new NodeImpl(nodeIdentity, this.graphIndexAccessor, this.nodeResolverSupport);
+            Set<Attribute> attributes = this.graphIndexAccessor.getEdgeAttributes(from.getIdentity(), to.getIdentity())
+                                                               .orElse(Collections.emptySet());
             return Optional.of(new EdgeImpl(from, to, attributes));
         }
         else
@@ -178,19 +178,27 @@ public class NodeImpl implements Node
     @Override
     public Optional<Edge> findIncomingEdgeFrom(NodeIdentity nodeIdentity)
     {
-        if (this.graphIndex.getIncomingNodes(this.nodeIdentity)
-                           .contains(nodeIdentity))
+        if (this.graphIndexAccessor.getIncomingNodes(this.nodeIdentity)
+                                   .contains(nodeIdentity))
         {
-            Node from = new NodeImpl(nodeIdentity, this.graphIndex, this.nodeResolverSupport);
+            Node from = new NodeImpl(nodeIdentity, this.graphIndexAccessor, this.nodeResolverSupport);
             Node to = this;
-            Set<Attribute> attributes = this.graphIndex.getEdgeAttributes(from.getIdentity(), to.getIdentity())
-                                                       .orElse(Collections.emptySet());
+            Set<Attribute> attributes = this.graphIndexAccessor.getEdgeAttributes(from.getIdentity(), to.getIdentity())
+                                                               .orElse(Collections.emptySet());
             return Optional.of(new EdgeImpl(from, to, attributes));
         }
         else
         {
             return Optional.empty();
         }
+    }
+
+    @Override
+    public Stream<Edge> findEdgesTo(NodeIdentity nodeIdentity)
+    {
+        return Stream.of(this.findIncomingEdgeFrom(nodeIdentity), this.findOutgoingEdgeTo(nodeIdentity))
+                     .filter(Optional::isPresent)
+                     .map(Optional::get);
     }
 
 }

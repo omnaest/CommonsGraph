@@ -128,14 +128,18 @@ public class GraphUtilsTest
         NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
         NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
         NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.1+2.3");
+        Tag exludingTag = Tag.of("tag");
         Graph graph = GraphUtils.builder()
                                 .addEdge(rootNode, intermediateNode1)
                                 .addEdge(rootNode, intermediateNode2)
                                 .addEdge(intermediateNode1, childNode1)
                                 .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode1, childNode3)
+                                .addEdgeWithAttributes(intermediateNode2, childNode3, exludingTag)
                                 .build();
 
-        assertEquals(5, graph.size());
+        assertEquals(6, graph.size());
 
         GraphRouter router = graph.routing();
 
@@ -149,6 +153,13 @@ public class GraphUtilsTest
                                                                    .stream()
                                                                    .map(NodeIdentity::getPrimaryId)
                                                                    .collect(Collectors.toList()));
+            assertEquals(Arrays.asList("1", "1.1"), routes.first()
+                                                          .get()
+                                                          .getSubRouteUntilLastNth(1)
+                                                          .stream()
+                                                          .map(Node::getIdentity)
+                                                          .map(NodeIdentity::getPrimaryId)
+                                                          .collect(Collectors.toList()));
         }
         {
             Routes routes = router.withBreadthFirst()
@@ -160,6 +171,18 @@ public class GraphUtilsTest
                                                                    .stream()
                                                                    .map(NodeIdentity::getPrimaryId)
                                                                    .collect(Collectors.toList()));
+        }
+        {
+            Routes routes = router.withBreadthFirst()
+                                  .withExcludingEdgeByTagFilter(exludingTag)
+                                  .findAllOutgoingRoutesBetween(rootNode, childNode3);
+            assertEquals(1, routes.size());
+            assertEquals(Arrays.asList("1", "1.1", "1.1+2.3"), routes.first()
+                                                                     .get()
+                                                                     .toNodeIdentities()
+                                                                     .stream()
+                                                                     .map(NodeIdentity::getPrimaryId)
+                                                                     .collect(Collectors.toList()));
         }
     }
 
@@ -458,6 +481,45 @@ public class GraphUtilsTest
             e.printStackTrace();
             throw e;
         }
+    }
+
+    @Test
+    public void testSubGraph() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1)
+                                .addEdge(rootNode, intermediateNode2)
+                                .addEdge(rootNode, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode2, childNode3)
+                                .build();
+        assertEquals(Arrays.asList(rootNode, intermediateNode1, intermediateNode3, childNode1, childNode2, childNode3)
+                           .stream()
+                           .collect(Collectors.toSet()),
+                     graph.subGraph()
+                          .withExcludedNodes(intermediateNode2)
+                          .build()
+                          .stream()
+                          .map(Node::getIdentity)
+                          .collect(Collectors.toSet()));
+        assertEquals(Arrays.asList(intermediateNode2, intermediateNode3, childNode1)
+                           .stream()
+                           .collect(Collectors.toSet()),
+                     graph.subGraph()
+                          .withIncludedNodes(intermediateNode2, intermediateNode3, childNode1)
+                          .build()
+                          .stream()
+                          .map(Node::getIdentity)
+                          .collect(Collectors.toSet()));
+
     }
 
     @Test

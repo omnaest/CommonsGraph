@@ -163,12 +163,6 @@ public class GraphIndex extends AbstractJSONSerializable
         return Collections.unmodifiableSet(this.unresolvedNodes);
     }
 
-    @JsonIgnore
-    public boolean hasUnresolvedNodes()
-    {
-        return !this.unresolvedNodes.isEmpty();
-    }
-
     @Override
     public int hashCode()
     {

@@ -18,6 +18,7 @@ package org.omnaest.utils.graph.domain;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 import org.omnaest.utils.ListUtils;
@@ -75,7 +76,15 @@ public class NodeIdentity implements Supplier<List<String>>
             @Override
             public NodeIdentityBuilder add(Enum<?> value)
             {
-                return this.add(value.name());
+                return this.add(Optional.ofNullable(value)
+                                        .map(Enum::name)
+                                        .orElse(null));
+            }
+
+            @Override
+            public NodeIdentityBuilder add(int token)
+            {
+                return this.add(String.valueOf(token));
             }
 
             @Override
@@ -83,6 +92,7 @@ public class NodeIdentity implements Supplier<List<String>>
             {
                 return NodeIdentity.of(this.ids.toArray(new String[this.ids.size()]));
             }
+
         };
     }
 
@@ -90,9 +100,12 @@ public class NodeIdentity implements Supplier<List<String>>
     {
         public NodeIdentityBuilder add(String token);
 
+        public NodeIdentityBuilder add(int token);
+
         public NodeIdentityBuilder add(Enum<?> value);
 
         public NodeIdentity build();
+
     }
 
     @Override
@@ -121,6 +134,56 @@ public class NodeIdentity implements Supplier<List<String>>
     public String getPrimaryId()
     {
         return ListUtils.first(this.ids);
+    }
+
+    @JsonIgnore
+    public Optional<String> getSecondaryId()
+    {
+        return this.getNthId(1);
+    }
+
+    /**
+     * Returns the nth id.<br>
+     * <br>
+     * index = 0, 1, 2, ...
+     * 
+     * @param index
+     * @return
+     */
+    @JsonIgnore
+    public Optional<String> getNthId(int index)
+    {
+        return ListUtils.getOptional(this.ids, index);
+    }
+
+    @JsonIgnore
+    public IdMapper getPrimaryIdAs()
+    {
+        return this.getNthIdAs(0);
+    }
+
+    @JsonIgnore
+    public IdMapper getSecondaryIdAs()
+    {
+        return this.getNthIdAs(1);
+    }
+
+    @JsonIgnore
+    public IdMapper getTertiaryIdAs()
+    {
+        return this.getNthIdAs(2);
+    }
+
+    /**
+     * Similar to {@link #getNthId(int)} but allows to map to other types like enums.
+     * 
+     * @param index
+     * @return
+     */
+    @JsonIgnore
+    public IdMapper getNthIdAs(int index)
+    {
+        return new IdMapper(this.getNthId(index));
     }
 
     @Override
@@ -160,6 +223,22 @@ public class NodeIdentity implements Supplier<List<String>>
             return false;
         }
         return true;
+    }
+
+    public static class IdMapper
+    {
+        private Optional<String> id;
+
+        protected IdMapper(Optional<String> id)
+        {
+            super();
+            this.id = id;
+        }
+
+        public <E extends Enum<E>> Optional<E> enumValue(Class<E> enumType)
+        {
+            return this.id.map(identifier -> Enum.valueOf(enumType, identifier));
+        }
     }
 
 }

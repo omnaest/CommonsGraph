@@ -33,6 +33,7 @@ import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Tag;
 import org.omnaest.utils.graph.internal.index.GraphIndex;
+import org.omnaest.utils.graph.internal.index.filter.GraphNodesFilter;
 
 public class GraphBuilderImpl implements GraphBuilder
 {
@@ -131,7 +132,7 @@ public class GraphBuilderImpl implements GraphBuilder
     @Override
     public Graph build()
     {
-        return new GraphImpl(this.graphIndexContext.getGraphIndex(), this.graphIndexContext.getNodeResolverSupport());
+        return new GraphImpl(this.graphIndexContext.getGraphIndex(), this.graphIndexContext.getNodeResolverSupport(), GraphNodesFilter.empty());
     }
 
     @Override

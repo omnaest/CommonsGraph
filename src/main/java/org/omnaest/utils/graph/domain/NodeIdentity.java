@@ -93,6 +93,12 @@ public class NodeIdentity implements Supplier<List<String>>
                 return NodeIdentity.of(this.ids.toArray(new String[this.ids.size()]));
             }
 
+            @Override
+            public NodeIdentityBuilder add(boolean value)
+            {
+                return this.add(String.valueOf(value));
+            }
+
         };
     }
 
@@ -103,6 +109,8 @@ public class NodeIdentity implements Supplier<List<String>>
         public NodeIdentityBuilder add(int token);
 
         public NodeIdentityBuilder add(Enum<?> value);
+
+        public NodeIdentityBuilder add(boolean value);
 
         public NodeIdentity build();
 

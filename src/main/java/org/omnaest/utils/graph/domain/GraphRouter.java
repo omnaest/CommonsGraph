@@ -20,10 +20,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.ToDoubleFunction;
+import java.util.stream.Stream;
 
 import org.omnaest.utils.stream.Streamable;
 
@@ -70,6 +72,8 @@ public interface GraphRouter
         public RoutingStrategy withDisabledNodeResolving();
 
         public RoutingStrategy withDisabledNodeResolving(boolean disabledNodeResolving);
+
+        public RoutingStrategy budgetOptimized();
 
         public Traversal traverseIncoming(Set<NodeIdentity> startNodes);
 
@@ -156,18 +160,48 @@ public interface GraphRouter
          * @see #applyAsDouble(Route)
          * @author omnaest
          */
-        public static interface IsolatedNodeWeightByRouteDeterminationFunction extends ToDoubleFunction<Route>
+        public static interface IsolatedNodeWeightByRouteDeterminationFunction extends ToDoubleFunction<SimpleRoute>
         {
             /**
              * Determines the isolated weight of a single {@link Route}.
              * 
-             * @param node
+             * @param route
              * @return
              */
             @Override
-            public double applyAsDouble(Route node);
+            public double applyAsDouble(SimpleRoute route);
         }
 
+        /**
+         * {@link Stream} of the routes returned by the traversal
+         * 
+         * @return
+         */
+        public Stream<RouteAndTraversalControl> routes();
+
+        public Hierarchy asHierarchy();
+
+    }
+
+    public static interface Hierarchy extends Supplier<Stream<HierarchicalNode>>
+    {
+
+        public String asJson();
+
+        public String asJsonWithData(BiConsumer<HierarchicalNode, DataBuilder> nodeAndDataBuilderConsumer);
+
+    }
+
+    public static interface DataBuilder
+    {
+        public DataBuilder put(String key, Object value);
+    }
+
+    public static interface HierarchicalNode extends Supplier<Node>
+    {
+        public Optional<Edge> getEdge();
+
+        public Stream<HierarchicalNode> getChildren();
     }
 
     public static interface TraversalRoutesConsumer extends Consumer<Routes>
@@ -246,7 +280,7 @@ public interface GraphRouter
 
     }
 
-    public static interface Route extends Streamable<Node>
+    public static interface SimpleRoute extends Streamable<Node>
     {
         public List<NodeIdentity> toNodeIdentities();
 
@@ -266,8 +300,6 @@ public interface GraphRouter
          */
         public Optional<Node> lastNth(int index);
 
-        public Optional<Edge> lastEdge();
-
         public boolean isCyclic();
 
         /**
@@ -276,7 +308,7 @@ public interface GraphRouter
          * @param nodeIdentity
          * @return
          */
-        public Route addToNew(NodeIdentity nodeIdentity);
+        public SimpleRoute addToNew(NodeIdentity nodeIdentity);
 
         /**
          * Returns a sub {@link Route} until the nth last {@link Node}
@@ -284,7 +316,41 @@ public interface GraphRouter
          * @param index
          * @return
          */
-        public Route getSubRouteUntilLastNth(int index);
+        public SimpleRoute getSubRouteUntilLastNth(int index);
+    }
+
+    public static interface Route extends SimpleRoute
+    {
+        public Optional<TraversedEdge> lastEdge();
+
+        public Optional<TraversedEdge> firstEdge();
+
+        public TraversedEdges edges();
+
+    }
+
+    /**
+     * A traversed {@link Edge} where #getNextNode() returns the next node of the traversal and #getPreviousNode()
+     * returns the previous node in the traversal.<br>
+     * <br>
+     * #getEdge() returns the orginal {@link Edge} from the {@link Graph}. This edge is in the original direction and not aligned to the traversal direction.
+     * <br>
+     * <br>
+     * Implements the {@link #hashCode()} and {@link #equals(Object)} redirecting to the underlying {@link #getEdge()}
+     * 
+     * @author omnaest
+     */
+    public static interface TraversedEdge
+    {
+        public Node getNextNode();
+
+        public Node getPreviousNode();
+
+        public Edge getEdge();
+    }
+
+    public static interface TraversedEdges extends Streamable<TraversedEdge>
+    {
     }
 
 }

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -28,17 +29,21 @@ import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.AssertionUtils;
+import org.omnaest.utils.ComparatorUtils;
 import org.omnaest.utils.ConsumerUtils;
+import org.omnaest.utils.JSONHelper;
 import org.omnaest.utils.ListUtils;
 import org.omnaest.utils.MapperUtils;
 import org.omnaest.utils.OptionalUtils;
@@ -46,31 +51,42 @@ import org.omnaest.utils.PeekUtils;
 import org.omnaest.utils.PredicateUtils;
 import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.StreamUtils;
+import org.omnaest.utils.StreamUtils.SplittedStream;
 import org.omnaest.utils.element.bi.BiElement;
 import org.omnaest.utils.element.bi.UnaryBiElement;
 import org.omnaest.utils.element.cached.CachedElement;
 import org.omnaest.utils.graph.domain.Edge;
+import org.omnaest.utils.graph.domain.Edges;
 import org.omnaest.utils.graph.domain.Graph;
+import org.omnaest.utils.graph.domain.GraphRouter;
+import org.omnaest.utils.graph.domain.GraphRouter.DataBuilder;
 import org.omnaest.utils.graph.domain.GraphRouter.Direction;
+import org.omnaest.utils.graph.domain.GraphRouter.HierarchicalNode;
+import org.omnaest.utils.graph.domain.GraphRouter.Hierarchy;
 import org.omnaest.utils.graph.domain.GraphRouter.Route;
 import org.omnaest.utils.graph.domain.GraphRouter.RouteAndTraversalControl;
 import org.omnaest.utils.graph.domain.GraphRouter.Routes;
 import org.omnaest.utils.graph.domain.GraphRouter.RoutingStrategy;
+import org.omnaest.utils.graph.domain.GraphRouter.SimpleRoute;
 import org.omnaest.utils.graph.domain.GraphRouter.Traversal;
 import org.omnaest.utils.graph.domain.GraphRouter.Traversal.NodeWeightDeterminationFunction;
 import org.omnaest.utils.graph.domain.GraphRouter.TraversalRoutes;
 import org.omnaest.utils.graph.domain.GraphRouter.TraversalRoutesConsumer;
+import org.omnaest.utils.graph.domain.GraphRouter.TraversedEdge;
 import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Nodes;
 import org.omnaest.utils.graph.domain.Tag;
 import org.omnaest.utils.graph.internal.router.route.RouteImpl;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 public class BreadthFirstRoutingStrategy implements RoutingStrategy
 {
     private Graph            graph;
     private boolean          enableNodeResolving = true;
     private List<EdgeFilter> edgeFilters         = new ArrayList<>();
+    private BudgetManager    budgetManager       = new NoBudgetManager();
 
     @Override
     public BreadthFirstRoutingStrategy withEdgeFilter(EdgeFilter edgeFilter)
@@ -107,6 +123,73 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     }
 
     @Override
+    public RoutingStrategy budgetOptimized()
+    {
+        this.budgetManager = new OptimziedBudgetManager();
+        return this;
+    }
+
+    private static interface BudgetManager extends UnaryOperator<List<NodeAndContext>>
+    {
+
+        public double calculateBudgetScore(NodeAndContext parentNodeAndContext, TraversedEdges siblingEdges);
+
+    }
+
+    private static class NoBudgetManager implements BudgetManager
+    {
+
+        @Override
+        public List<NodeAndContext> apply(List<NodeAndContext> nodeAndPaths)
+        {
+            return nodeAndPaths;
+        }
+
+        @Override
+        public double calculateBudgetScore(NodeAndContext parentNodeAndContext, TraversedEdges siblingEdges)
+        {
+            return 0.0;
+        }
+
+    }
+
+    private static class OptimziedBudgetManager implements BudgetManager
+    {
+        private List<NodeAndContext> stack = new ArrayList<>();
+
+        @Override
+        public List<NodeAndContext> apply(List<NodeAndContext> nodeAndContext)
+        {
+            List<NodeAndContext> sortedNodeAndContext = Stream.concat(this.stack.stream(), nodeAndContext.stream())
+                                                              .sorted(ComparatorUtils.builder()
+                                                                                     .of(NodeAndContext.class)
+                                                                                     .with(NodeAndContext::getBudgetScore)
+                                                                                     .build())
+                                                              .collect(Collectors.toList());
+
+            double average = sortedNodeAndContext.stream()
+                                                 .mapToDouble(NodeAndContext::getBudgetScore)
+                                                 .average()
+                                                 .orElse(0.0);
+
+            SplittedStream<NodeAndContext> splittedStream = StreamUtils.splitByFilter(sortedNodeAndContext.stream(),
+                                                                                      iNodeAndContext -> iNodeAndContext.getBudgetScore() >= average);
+
+            this.stack = splittedStream.excluded()
+                                       .collect(Collectors.toList());
+            List<NodeAndContext> result = splittedStream.included()
+                                                        .collect(Collectors.toList());
+            return result;
+        }
+
+        @Override
+        public double calculateBudgetScore(NodeAndContext parentNodeAndContext, TraversedEdges siblingEdges)
+        {
+            return parentNodeAndContext.getBudgetScore() / Math.max(1.0, siblingEdges.size());
+        }
+    }
+
+    @Override
     public Routes findAllIncomingRoutesBetween(NodeIdentity from, NodeIdentity to)
     {
         return this.findAllRoutesBetween(from, to, ForwardFunctions.INCOMING);
@@ -124,8 +207,8 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         List<Route> routes = new ArrayList<>();
         if (startNode.isPresent())
         {
-            List<NodeAndPath> currentNodeAndPaths = new ArrayList<>();
-            currentNodeAndPaths.add(NodeAndPath.of(startNode.get()));
+            List<NodeAndContext> currentNodeAndPaths = new ArrayList<>();
+            currentNodeAndPaths.add(NodeAndContext.of(startNode.get()));
 
             if (this.graph.findNodeById(to)
                           .map(node -> node.equals(startNode.get()))
@@ -133,7 +216,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             {
                 routes.add(new RouteImpl(Arrays.asList(startNode.get()
                                                                 .getIdentity()),
-                                         this.graph));
+                                         Collections.emptyList(), this.graph));
             }
             Set<NodeIdentity> visitedNodes = new HashSet<>();
             while (!currentNodeAndPaths.isEmpty())
@@ -218,6 +301,8 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     {
         public ForwardNodeFunction forwardNodeFunction();
 
+        public ForwardEdgeFinderFunction forwardEdgeFinderFunction();
+
         public ForwardEdgeFunction forwardEdgeFunction();
     }
 
@@ -225,23 +310,162 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     {
     }
 
-    private static interface ForwardEdgeFunction extends BiFunction<Node, Node, Optional<Edge>>
+    private static interface ForwardEdgeFinderFunction extends BiFunction<Node, Node, Optional<Edge>>
     {
+    }
+
+    private static interface ForwardEdgeFunction extends Function<Node, TraversedEdges>
+    {
+    }
+
+    private static class TraversedEdges
+    {
+        private Edges                      edges;
+        private EdgeToNextNodeFunction     edgeToNextNodeFunction;
+        private EdgeToPreviousNodeFunction edgeToPreviousNodeFunction;
+
+        private TraversedEdges(Edges edges, EdgeToNextNodeFunction edgeToNextNodeFunction, EdgeToPreviousNodeFunction edgeToPreviousNodeFunction)
+        {
+            super();
+            this.edges = edges;
+            this.edgeToNextNodeFunction = edgeToNextNodeFunction;
+            this.edgeToPreviousNodeFunction = edgeToPreviousNodeFunction;
+        }
+
+        public static TraversedEdges of(Edges edges, EdgeToNextNodeFunction edgeToNextNodeFunction, EdgeToPreviousNodeFunction edgeToPreviousNodeFunction)
+        {
+            return new TraversedEdges(edges, edgeToNextNodeFunction, edgeToPreviousNodeFunction);
+        }
+
+        public Stream<TraversedEdge> stream()
+        {
+            return this.edges.stream()
+                             .map(edge -> new TraversedEdgeImpl(edge, this.edgeToNextNodeFunction.apply(edge), this.edgeToPreviousNodeFunction.apply(edge)));
+        }
+
+        public int size()
+        {
+            return this.edges.size();
+        }
+    }
+
+    private static class TraversedEdgeImpl implements TraversedEdge
+    {
+        private Edge edge;
+        private Node nextNode;
+        private Node previousNode;
+
+        public TraversedEdgeImpl(Edge edge, Node nextNode, Node previousNode)
+        {
+            super();
+            this.edge = edge;
+            this.nextNode = nextNode;
+            this.previousNode = previousNode;
+        }
+
+        @Override
+        public Edge getEdge()
+        {
+            return this.edge;
+        }
+
+        @Override
+        public Node getPreviousNode()
+        {
+            return this.previousNode;
+        }
+
+        @Override
+        public Node getNextNode()
+        {
+            return this.nextNode;
+        }
+
+        @Override
+        public String toString()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.append("TraversedEdge [edge=")
+                   .append(this.edge)
+                   .append(", nextNode=")
+                   .append(this.nextNode)
+                   .append("]");
+            return builder.toString();
+        }
+
+        @Override
+        public int hashCode()
+        {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((this.edge == null) ? 0 : this.edge.hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj)
+        {
+            if (this == obj)
+            {
+                return true;
+            }
+            if (obj == null)
+            {
+                return false;
+            }
+            if (!(obj instanceof TraversedEdgeImpl))
+            {
+                return false;
+            }
+            TraversedEdgeImpl other = (TraversedEdgeImpl) obj;
+            if (this.edge == null)
+            {
+                if (other.edge != null)
+                {
+                    return false;
+                }
+            }
+            else if (!this.edge.equals(other.edge))
+            {
+                return false;
+            }
+            return true;
+        }
+
+    }
+
+    private static interface EdgeToNextNodeFunction extends EdgeToOneNodeFunction
+    {
+
+    }
+
+    private static interface EdgeToPreviousNodeFunction extends EdgeToOneNodeFunction
+    {
+
+    }
+
+    private static interface EdgeToOneNodeFunction extends Function<Edge, Node>
+    {
+
     }
 
     private static enum ForwardFunctions implements ForwardFunctionsProvider
     {
-        OUTGOING(node -> node.getOutgoingNodes(), (from, to) -> from.findOutgoingEdgeTo(to.getIdentity())),
-        INCOMING(node -> node.getIncomingNodes(), (from, to) -> from.findIncomingEdgeFrom(to.getIdentity()));
+        OUTGOING(node -> node.getOutgoingNodes(), node -> TraversedEdges.of(node.getOutgoingEdges(), Edge::getTo, Edge::getFrom),
+                (from, to) -> from.findOutgoingEdgeTo(to.getIdentity())),
+        INCOMING(node -> node.getIncomingNodes(), node -> TraversedEdges.of(node.getIncomingEdges(), Edge::getFrom, Edge::getTo),
+                (from, to) -> from.findIncomingEdgeFrom(to.getIdentity()));
 
-        private ForwardNodeFunction forwardNodeFunction;
-        private ForwardEdgeFunction forwardEdgeFunction;
+        private ForwardNodeFunction       forwardNodeFunction;
+        private ForwardEdgeFunction       forwardEdgeFunction;
+        private ForwardEdgeFinderFunction forwardEdgeFinderFunction;
 
-        private ForwardFunctions(ForwardNodeFunction forwardNodeFunction, ForwardEdgeFunction forwardEdgeFunction)
+        private ForwardFunctions(ForwardNodeFunction forwardNodeFunction, ForwardEdgeFunction forwardEdgeFunction,
+                                 ForwardEdgeFinderFunction forwardEdgeFinderFunction)
         {
             this.forwardNodeFunction = forwardNodeFunction;
             this.forwardEdgeFunction = forwardEdgeFunction;
-
+            this.forwardEdgeFinderFunction = forwardEdgeFinderFunction;
         }
 
         @Override
@@ -251,10 +475,17 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
 
         @Override
+        public ForwardEdgeFinderFunction forwardEdgeFinderFunction()
+        {
+            return this.forwardEdgeFinderFunction;
+        }
+
+        @Override
         public ForwardEdgeFunction forwardEdgeFunction()
         {
             return this.forwardEdgeFunction;
         }
+
     }
 
     private class TraversalImpl implements Traversal
@@ -328,6 +559,181 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         {
             return this.withWeightedPathTerminationByBranches(terminationWeightBarrier, node -> 1.0);
         }
+
+        @Override
+        public Stream<RouteAndTraversalControl> routes()
+        {
+            return this.stream()
+                       .flatMap(TraversalRoutes::stream);
+        }
+
+        @Override
+        public Hierarchy asHierarchy()
+        {
+            Set<Node> rootNodes = this.stream()
+                                      .limit(1)
+                                      .flatMap(r -> r.stream())
+                                      .map(c -> c.get())
+                                      .flatMap(r -> r.stream())
+                                      .collect(Collectors.toSet());
+            Map<Node, Set<TraversedEdge>> parentNodeToChildNodes = this.routes()
+                                                                       .map(RouteAndTraversalControl::get)
+                                                                       .map(Route::edges)
+                                                                       .flatMap(GraphRouter.TraversedEdges::stream)
+                                                                       .collect(Collectors.groupingBy((TraversedEdge edge) -> edge.getPreviousNode(),
+                                                                                                      Collectors.mapping((TraversedEdge edge) -> edge,
+                                                                                                                         Collectors.toSet())));
+
+            return new Hierarchy()
+            {
+                @Override
+                public Stream<HierarchicalNode> get()
+                {
+                    return rootNodes.stream()
+                                    .map(this.createNodeToHierarchicalNodeMapper());
+                }
+
+                private Function<Node, HierarchicalNode> createNodeToHierarchicalNodeMapper()
+                {
+                    return node ->
+                    {
+                        return new HierarchicalNode()
+                        {
+                            @Override
+                            public Node get()
+                            {
+                                return node;
+                            }
+
+                            @Override
+                            public Stream<HierarchicalNode> getChildren()
+                            {
+                                return parentNodeToChildNodes.getOrDefault(node, Collections.emptySet())
+                                                             .stream()
+                                                             .map(createEdgeToHierarchicalNodeMapper());
+                            }
+
+                            @Override
+                            public Optional<Edge> getEdge()
+                            {
+                                return Optional.empty();
+                            }
+                        };
+                    };
+                }
+
+                private Function<TraversedEdge, HierarchicalNode> createEdgeToHierarchicalNodeMapper()
+                {
+                    return edge ->
+                    {
+                        Node node = edge.getNextNode();
+                        return new HierarchicalNode()
+                        {
+                            @Override
+                            public Node get()
+                            {
+                                return node;
+                            }
+
+                            @Override
+                            public Optional<Edge> getEdge()
+                            {
+                                return Optional.of(edge.getEdge());
+                            }
+
+                            @Override
+                            public Stream<HierarchicalNode> getChildren()
+                            {
+                                return parentNodeToChildNodes.getOrDefault(node, Collections.emptySet())
+                                                             .stream()
+                                                             .map(createEdgeToHierarchicalNodeMapper());
+                            }
+                        };
+                    };
+                }
+
+                @Override
+                public String asJson()
+                {
+                    return this.asJsonWithData(ConsumerUtils.noOperation());
+                }
+
+                @Override
+                public String asJsonWithData(BiConsumer<HierarchicalNode, DataBuilder> nodeAndDataBuilderConsumer)
+                {
+                    return JSONHelper.serializer(List.class)
+                                     .withPrettyPrint()
+                                     .apply(this.get()
+                                                .map(this.createHierarchyNodeToJsonSerializableNodeMapper(nodeAndDataBuilderConsumer))
+                                                .collect(Collectors.toList()));
+                }
+
+                private Function<HierarchicalNode, JsonSerializableHierarchyNode> createHierarchyNodeToJsonSerializableNodeMapper(BiConsumer<HierarchicalNode, DataBuilder> nodeAndDataBuilderConsumer)
+                {
+                    return node ->
+                    {
+                        Map<String, Object> data = new HashMap<>();
+                        nodeAndDataBuilderConsumer.accept(node, this.createDataBuilder(data));
+                        return new JsonSerializableHierarchyNode(node.get()
+                                                                     .getIdentity(),
+                                                                 node.getChildren()
+                                                                     .map(this.createHierarchyNodeToJsonSerializableNodeMapper(nodeAndDataBuilderConsumer))
+                                                                     .collect(Collectors.toList()),
+                                                                 data);
+                    };
+                }
+
+                private DataBuilder createDataBuilder(Map<String, Object> data)
+                {
+                    return new DataBuilder()
+                    {
+                        @Override
+                        public DataBuilder put(String key, Object value)
+                        {
+                            data.put(key, value);
+                            return this;
+                        }
+                    };
+                }
+            };
+        }
+    }
+
+    @SuppressWarnings("unused")
+    private static class JsonSerializableHierarchyNode
+    {
+        @JsonProperty
+        private NodeIdentity nodeIdentity;
+
+        @JsonProperty
+        private Map<String, Object> data;
+
+        @JsonProperty
+        private List<JsonSerializableHierarchyNode> children;
+
+        public JsonSerializableHierarchyNode(NodeIdentity nodeIdentity, List<JsonSerializableHierarchyNode> children, Map<String, Object> data)
+        {
+            super();
+            this.nodeIdentity = nodeIdentity;
+            this.children = children;
+            this.data = data;
+        }
+
+        public NodeIdentity getNodeIdentity()
+        {
+            return this.nodeIdentity;
+        }
+
+        public List<JsonSerializableHierarchyNode> getChildren()
+        {
+            return this.children;
+        }
+
+        public Map<String, Object> getData()
+        {
+            return this.data;
+        }
+
     }
 
     private static class WeightedTerminationHandler implements Consumer<TraversalRoutes>
@@ -389,15 +795,15 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
     }
 
-    private Set<NodeIdentity> determineNodesFrom(List<NodeAndPath> currentNodes)
+    private Set<NodeIdentity> determineNodesFrom(List<NodeAndContext> currentNodes)
     {
         return currentNodes.stream()
-                           .map(NodeAndPath::getNode)
+                           .map(NodeAndContext::getNode)
                            .map(Node::getIdentity)
                            .collect(Collectors.toSet());
     }
 
-    private List<Route> determineRoutesByMatchingNodes(Optional<Node> targetNode, List<NodeAndPath> currentNodes)
+    private List<Route> determineRoutesByMatchingNodes(Optional<Node> targetNode, List<NodeAndContext> currentNodes)
     {
         if (targetNode.isPresent())
         {
@@ -409,18 +815,18 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
     }
 
-    private List<Route> wrapMatchingNodeAndPathsIntoRoutes(Collection<NodeAndPath> matchingNodes)
+    private List<Route> wrapMatchingNodeAndPathsIntoRoutes(Collection<NodeAndContext> matchingNodes)
     {
         return matchingNodes.stream()
                             .map(nodeAndPath -> new RouteImpl(nodeAndPath.getFullPath()
                                                                          .stream()
                                                                          .map(Node::getIdentity)
                                                                          .collect(Collectors.toList()),
-                                                              this.graph))
+                                                              nodeAndPath.getEdges(), this.graph))
                             .collect(Collectors.toList());
     }
 
-    private List<NodeAndPath> determineMatchingNodes(Optional<Node> targetNode, List<NodeAndPath> currentNodes)
+    private List<NodeAndContext> determineMatchingNodes(Optional<Node> targetNode, List<NodeAndContext> currentNodes)
     {
         return currentNodes.stream()
                            .filter(nodeAndPath -> nodeAndPath.getNode()
@@ -428,32 +834,43 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                            .collect(Collectors.toList());
     }
 
-    private List<NodeAndPath> determineNextNodes(ForwardFunctionsProvider forwardFunctions, List<NodeAndPath> currentNodes, Set<NodeIdentity> visitedNodes,
-                                                 SkipNodes skipNodes, Consumer<Set<NodeAndPath>> visitedNodesHitConsumer)
+    private List<NodeAndContext> determineNextNodes(ForwardFunctionsProvider forwardFunctions, List<NodeAndContext> currentNodeAndPaths,
+                                                    Set<NodeIdentity> visitedNodes, SkipNodes skipNodes, Consumer<Set<NodeAndContext>> visitedNodesHitConsumer)
     {
-        Set<NodeAndPath> visitedNodesHitPaths = new HashSet<>();
-        List<NodeAndPath> result = currentNodes.stream()
-                                               .filter(skipNodes::matchesNot)
-                                               .flatMap(nodeAndPath -> forwardFunctions.forwardNodeFunction()
-                                                                                       .apply(nodeAndPath.getNode())
-                                                                                       .stream()
-                                                                                       .filter(PredicateUtils.isCollectionNotContaining(visitedNodes)
-                                                                                                             .from(Node::getIdentity)
-                                                                                                             .ifFalseThen(excludedNode -> visitedNodesHitPaths.add(nodeAndPath.append(excludedNode))))
-                                                                                       .map(nodeAndPath::append))
-                                               .filter(skipNodes::matchesNot)
-                                               .filter(this.createEdgesFilter(forwardFunctions.forwardEdgeFunction()))
-                                               .collect(Collectors.toList());
+        Set<NodeAndContext> visitedNodesHitPaths = new HashSet<>();
+        List<NodeAndContext> result = currentNodeAndPaths.stream()
+                                                         .filter(skipNodes::matchesNot)
+                                                         .flatMap(this.explodeCurrentNodeIntoNextNodes(forwardFunctions, visitedNodes, visitedNodesHitPaths))
+                                                         .filter(skipNodes::matchesNot)
+                                                         .filter(this.createEdgesFilter(forwardFunctions.forwardEdgeFinderFunction()))
+                                                         .collect(Collectors.toList());
 
         if (!visitedNodesHitPaths.isEmpty())
         {
             visitedNodesHitConsumer.accept(visitedNodesHitPaths);
         }
 
-        return result;
+        return this.budgetManager.apply(result);
     }
 
-    private Predicate<NodeAndPath> createEdgesFilter(BiFunction<Node, Node, Optional<Edge>> edgesFunction)
+    private Function<NodeAndContext, Stream<NodeAndContext>> explodeCurrentNodeIntoNextNodes(ForwardFunctionsProvider forwardFunctions,
+                                                                                             Set<NodeIdentity> visitedNodes,
+                                                                                             Set<NodeAndContext> visitedNodesHitPaths)
+    {
+        return parentNodeAndContext ->
+        {
+            TraversedEdges nextEdges = forwardFunctions.forwardEdgeFunction()
+                                                       .apply(parentNodeAndContext.getNode());
+            return nextEdges.stream()
+                            .filter(edge -> PredicateUtils.isCollectionNotContaining(visitedNodes)
+                                                          .<Node>from(node -> node.getIdentity())
+                                                          .ifFalseThen(excludedNode -> visitedNodesHitPaths.add(parentNodeAndContext.append(edge)))
+                                                          .test(edge.getNextNode()))
+                            .map(edge -> parentNodeAndContext.append(edge, this.budgetManager.calculateBudgetScore(parentNodeAndContext, nextEdges)));
+        };
+    }
+
+    private Predicate<NodeAndContext> createEdgesFilter(BiFunction<Node, Node, Optional<Edge>> edgesFunction)
     {
         List<EdgeFilter> edgeFilters = this.edgeFilters;
         if (edgeFilters.isEmpty())
@@ -478,19 +895,19 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
     private static class SkipNodes
     {
-        private Set<NodeIdentity> nodeIdentities = new HashSet<>();
-        private Set<NodeAndPath>  paths          = new HashSet<>();
+        private Set<NodeIdentity>   nodeIdentities = new HashSet<>();
+        private Set<NodeAndContext> paths          = new HashSet<>();
 
-        public boolean matchesNot(NodeAndPath nodeAndPath)
+        public boolean matchesNot(NodeAndContext nodeAndPath)
         {
             return !this.matches(nodeAndPath);
         }
 
-        public boolean matches(NodeAndPath nodeAndPath)
+        public boolean matches(NodeAndContext nodeAndPath)
         {
             boolean isMatchedByNodeIdentities = PredicateUtils.isCollectionContaining(this.nodeIdentities)
                                                               .from(Node::getIdentity)
-                                                              .from(NodeAndPath::getNode)
+                                                              .from(NodeAndContext::getNode)
                                                               .test(nodeAndPath);
             boolean isMatchedByPaths = PredicateUtils.isCollectionContaining(this.paths)
                                                      .test(nodeAndPath);
@@ -503,7 +920,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             return this;
         }
 
-        public SkipNodes add(NodeAndPath nodeAndPath)
+        public SkipNodes add(NodeAndContext nodeAndPath)
         {
             this.paths.add(nodeAndPath);
             return this;
@@ -619,14 +1036,14 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         private BreadthFirstIterator(Set<NodeIdentity> startNodes, ForwardFunctionsProvider forwardFunctions, Graph graph,
                                      List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers)
         {
-            List<NodeAndPath> startNodeAndPaths = Optional.ofNullable(startNodes)
-                                                          .orElse(Collections.emptySet())
-                                                          .stream()
-                                                          .map(graph::findNodeById)
-                                                          .filter(Optional::isPresent)
-                                                          .map(Optional::get)
-                                                          .map(NodeAndPath::of)
-                                                          .collect(Collectors.toList());
+            List<NodeAndContext> startNodeAndPaths = Optional.ofNullable(startNodes)
+                                                             .orElse(Collections.emptySet())
+                                                             .stream()
+                                                             .map(graph::findNodeById)
+                                                             .filter(Optional::isPresent)
+                                                             .map(Optional::get)
+                                                             .map(NodeAndContext::of)
+                                                             .collect(Collectors.toList());
             SkipNodes skipNodes = new SkipNodes();
             this.currentRoutesControl = CachedElement.of(new BreadthFirstSupplier(startNodeAndPaths, forwardFunctions, this.counter, skipNodes,
                                                                                   alreadyVisitedNodesHitHandlers))
@@ -656,9 +1073,9 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             private final AtomicLong                    counter;
             private final List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers;
 
-            private List<NodeAndPath> currentNodeAndPaths;
+            private List<NodeAndContext> currentNodeAndPaths;
 
-            private BreadthFirstSupplier(List<NodeAndPath> startNodeAndPaths, ForwardFunctionsProvider forwardFunctions, AtomicLong counter,
+            private BreadthFirstSupplier(List<NodeAndContext> startNodeAndPaths, ForwardFunctionsProvider forwardFunctions, AtomicLong counter,
                                          SkipNodes skipNodes, List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers)
             {
                 this.forwardFunctions = forwardFunctions;
@@ -681,7 +1098,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                 return new RoutesControl(new RoutesImpl(routes), this.skipNodes, this.counter.incrementAndGet(), () -> this.counter.get());
             }
 
-            private Consumer<Set<NodeAndPath>> createVisitedNodesHitConsumer()
+            private Consumer<Set<NodeAndContext>> createVisitedNodesHitConsumer()
             {
                 return nodeAndPaths -> this.alreadyVisitedNodesHitHandlers.forEach(handler -> handler.accept(new RoutesImpl(BreadthFirstRoutingStrategy.this.wrapMatchingNodeAndPathsIntoRoutes(nodeAndPaths))));
             }
@@ -742,6 +1159,115 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
     }
 
+    protected static class NodeAndContext
+    {
+        private static final double DEFAULT_BUDGET_SCORE = 1.0;
+
+        private NodeAndPath         nodeAndPath;
+        private List<TraversedEdge> edges;
+        private double              budgetScore;
+
+        public NodeAndContext(Node node, List<Node> path, List<TraversedEdge> edges, double budgetScore)
+        {
+            this(new NodeAndPath(node, path), edges, budgetScore);
+        }
+
+        public NodeAndContext(NodeAndPath nodeAndPath, List<TraversedEdge> edges, double budgetScore)
+        {
+            this.nodeAndPath = nodeAndPath;
+            this.edges = edges;
+            this.budgetScore = budgetScore;
+        }
+
+        public List<TraversedEdge> getEdges()
+        {
+            return this.edges.stream()
+                             .collect(Collectors.toList());
+        }
+
+        public double getBudgetScore()
+        {
+            return this.budgetScore;
+        }
+
+        public static NodeAndContext of(Node node)
+        {
+            return new NodeAndContext(node, Collections.emptyList(), Collections.emptyList(), DEFAULT_BUDGET_SCORE);
+        }
+
+        public NodeAndContext append(TraversedEdge edge)
+        {
+            return this.append(edge, DEFAULT_BUDGET_SCORE);
+        }
+
+        public NodeAndContext append(TraversedEdge edge, double budgetScore)
+        {
+            return new NodeAndContext(this.nodeAndPath.append(edge.getNextNode()), ListUtils.addToNew(this.edges, edge), budgetScore);
+        }
+
+        public Node getNode()
+        {
+            return this.nodeAndPath.getNode();
+        }
+
+        @Override
+        public String toString()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.append("NodeAndContext [nodeAndPath=")
+                   .append(this.nodeAndPath)
+                   .append(", edges=")
+                   .append(this.edges)
+                   .append("]");
+            return builder.toString();
+        }
+
+        public List<Node> getFullPath()
+        {
+            return this.nodeAndPath.getFullPath();
+        }
+
+        @Override
+        public int hashCode()
+        {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((this.nodeAndPath == null) ? 0 : this.nodeAndPath.hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj)
+        {
+            if (this == obj)
+            {
+                return true;
+            }
+            if (obj == null)
+            {
+                return false;
+            }
+            if (!(obj instanceof NodeAndContext))
+            {
+                return false;
+            }
+            NodeAndContext other = (NodeAndContext) obj;
+            if (this.nodeAndPath == null)
+            {
+                if (other.nodeAndPath != null)
+                {
+                    return false;
+                }
+            }
+            else if (!this.nodeAndPath.equals(other.nodeAndPath))
+            {
+                return false;
+            }
+            return true;
+        }
+
+    }
+
     protected static class NodeAndPath
     {
         private Node       node;
@@ -752,6 +1278,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             super();
             this.node = node;
             this.path = path;
+
         }
 
         public static NodeAndPath of(Node node)
@@ -761,6 +1288,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
         public NodeAndPath append(Node node)
         {
+
             return new NodeAndPath(node, ListUtils.addToNew(this.path, this.node));
         }
 
@@ -854,15 +1382,15 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             this.addToSkipNodes(Arrays.asList(nodeIdentities));
         }
 
-        public void addRouteToSkipNodes(Route route)
+        public void addRouteToSkipNodes(SimpleRoute route)
         {
             if (route != null)
             {
                 this.validateSkipIsStillPossible();
                 BiElement<List<Node>, Optional<Node>> remainingListAndLast = ListUtils.splitLast(route.toList());
-                this.skipNodes.add(new NodeAndPath(remainingListAndLast.getSecond()
-                                                                       .get(),
-                                                   remainingListAndLast.getFirst()));
+                this.skipNodes.add(new NodeAndContext(remainingListAndLast.getSecond()
+                                                                          .get(),
+                                                      remainingListAndLast.getFirst(), Collections.emptyList(), 0.0));
             }
         }
 

@@ -29,16 +29,23 @@ import java.util.stream.Collectors;
 
 import org.junit.Test;
 import org.omnaest.utils.JSONHelper;
+import org.omnaest.utils.MapperUtils;
+import org.omnaest.utils.PredicateUtils;
 import org.omnaest.utils.SetUtils;
+import org.omnaest.utils.element.bi.UnaryBiElement;
 import org.omnaest.utils.graph.domain.Attribute;
+import org.omnaest.utils.graph.domain.Edge;
 import org.omnaest.utils.graph.domain.Graph;
 import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.graph.domain.GraphRouter;
+import org.omnaest.utils.graph.domain.GraphRouter.HierarchicalNode;
+import org.omnaest.utils.graph.domain.GraphRouter.Hierarchy;
 import org.omnaest.utils.graph.domain.GraphRouter.Route;
 import org.omnaest.utils.graph.domain.GraphRouter.RouteAndTraversalControl;
 import org.omnaest.utils.graph.domain.GraphRouter.Routes;
 import org.omnaest.utils.graph.domain.GraphRouter.TraversalRoutes;
+import org.omnaest.utils.graph.domain.GraphRouter.TraversedEdge;
 import org.omnaest.utils.graph.domain.Node;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Tag;
@@ -284,6 +291,57 @@ public class GraphUtilsTest
                                                                                                                  .map(Optional::get)
                                                                                                                  .map(Node::getIdentity)
                                                                                                                  .collect(Collectors.toList()));
+        assertEquals(Arrays.asList(UnaryBiElement.of(intermediateNode1, childNode1), UnaryBiElement.of(rootNode, intermediateNode1)), graph.routing()
+                                                                                                                                           .withBreadthFirst()
+                                                                                                                                           .traverseIncoming(childNode1)
+                                                                                                                                           .routes()
+                                                                                                                                           .map(RouteAndTraversalControl::get)
+                                                                                                                                           .map(Route::lastEdge)
+                                                                                                                                           .filter(PredicateUtils.filterNonEmptyOptional())
+                                                                                                                                           .map(MapperUtils.mapOptionalToValue())
+                                                                                                                                           .map(TraversedEdge::getEdge)
+                                                                                                                                           .map(Edge::getNodeIdentities)
+                                                                                                                                           .collect(Collectors.toList()));
+        assertEquals(Arrays.asList(UnaryBiElement.of(intermediateNode1, childNode1), UnaryBiElement.of(intermediateNode1, childNode1)), graph.routing()
+                                                                                                                                             .withBreadthFirst()
+                                                                                                                                             .traverseIncoming(childNode1)
+                                                                                                                                             .routes()
+                                                                                                                                             .map(RouteAndTraversalControl::get)
+                                                                                                                                             .map(Route::firstEdge)
+                                                                                                                                             .filter(PredicateUtils.filterNonEmptyOptional())
+                                                                                                                                             .map(MapperUtils.mapOptionalToValue())
+                                                                                                                                             .map(TraversedEdge::getEdge)
+                                                                                                                                             .map(Edge::getNodeIdentities)
+                                                                                                                                             .collect(Collectors.toList()));
+        assertEquals(SetUtils.toSet(UnaryBiElement.of(rootNode, intermediateNode1), UnaryBiElement.of(rootNode, intermediateNode2),
+                                    UnaryBiElement.of(rootNode, intermediateNode3), UnaryBiElement.of(intermediateNode1, childNode1),
+                                    UnaryBiElement.of(intermediateNode1, childNode2), UnaryBiElement.of(intermediateNode2, childNode3)),
+                     graph.routing()
+                          .withBreadthFirst()
+                          .traverseOutgoing(rootNode)
+                          .routes()
+                          .limit(7)
+                          .map(RouteAndTraversalControl::get)
+                          .map(Route::lastEdge)
+                          .filter(PredicateUtils.filterNonEmptyOptional())
+                          .map(MapperUtils.mapOptionalToValue())
+                          .map(TraversedEdge::getEdge)
+                          .map(Edge::getNodeIdentities)
+                          .collect(Collectors.toSet()));
+        assertEquals(SetUtils.toSet(UnaryBiElement.of(rootNode, intermediateNode1), UnaryBiElement.of(rootNode, intermediateNode2),
+                                    UnaryBiElement.of(rootNode, intermediateNode3)),
+                     graph.routing()
+                          .withBreadthFirst()
+                          .traverseOutgoing(rootNode)
+                          .routes()
+                          .limit(7)
+                          .map(RouteAndTraversalControl::get)
+                          .map(Route::firstEdge)
+                          .filter(PredicateUtils.filterNonEmptyOptional())
+                          .map(MapperUtils.mapOptionalToValue())
+                          .map(TraversedEdge::getEdge)
+                          .map(Edge::getNodeIdentities)
+                          .collect(Collectors.toSet()));
     }
 
     @Test
@@ -348,6 +406,73 @@ public class GraphUtilsTest
                           .map(Optional::get)
                           .map(Node::getIdentity)
                           .collect(Collectors.toSet()));
+    }
+
+    @Test
+    public void testBudgetTraversal() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity intermediateNode4 = NodeIdentity.of("1.4");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        NodeIdentity childNode4 = NodeIdentity.of("1.3.1");
+        NodeIdentity childNode5 = NodeIdentity.of("1.3.2");
+        NodeIdentity childNode6 = NodeIdentity.of("1.3.3");
+        NodeIdentity childNode7 = NodeIdentity.of("1.3.4");
+        NodeIdentity childNode8 = NodeIdentity.of("1.3.5");
+        NodeIdentity leafNode1 = NodeIdentity.of("1.1.1.1");
+        NodeIdentity leafNode2 = NodeIdentity.of("1.1.2.1");
+        NodeIdentity leafNode3 = NodeIdentity.of("1.2.1.1");
+        NodeIdentity leafNode4 = NodeIdentity.of("1.3.1.1");
+        NodeIdentity leafNode5 = NodeIdentity.of("1.3.2.1");
+        NodeIdentity leafNode6 = NodeIdentity.of("1.3.3.1");
+        NodeIdentity leafNode7 = NodeIdentity.of("1.3.4.1");
+        NodeIdentity leafNode8 = NodeIdentity.of("1.3.5.1");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1) // 0.25
+                                .addEdge(rootNode, intermediateNode2) // 0.25
+                                .addEdge(rootNode, intermediateNode3) // 0.25
+                                .addEdge(rootNode, intermediateNode4) // 0.25
+                                .addEdge(intermediateNode1, childNode1) // 0.125
+                                .addEdge(intermediateNode1, childNode2) // 0.125
+                                .addEdge(intermediateNode2, childNode3) // 0.25
+                                .addEdge(intermediateNode3, childNode4) // 0.05
+                                .addEdge(intermediateNode3, childNode5) // 0.05
+                                .addEdge(intermediateNode3, childNode6) // 0.05
+                                .addEdge(intermediateNode3, childNode7) // 0.05
+                                .addEdge(intermediateNode3, childNode8) // 0.05
+                                .addEdge(childNode1, leafNode1) // 0.125
+                                .addEdge(childNode2, leafNode2) // 0.125
+                                .addEdge(childNode3, leafNode3) // 0.25
+                                .addEdge(childNode4, leafNode4) // 0.05
+                                .addEdge(childNode5, leafNode5) // 0.05
+                                .addEdge(childNode6, leafNode6) // 0.05
+                                .addEdge(childNode7, leafNode7) // 0.05
+                                .addEdge(childNode8, leafNode8) // 0.05
+                                .build();
+
+        assertEquals(Arrays.asList(SetUtils.toSet(rootNode), SetUtils.toSet(intermediateNode1, intermediateNode2, intermediateNode3, intermediateNode4),
+                                   SetUtils.toSet(childNode1, childNode2, childNode3), SetUtils.toSet(leafNode1, leafNode2, leafNode3),
+                                   SetUtils.toSet(childNode4, childNode5, childNode6, childNode7, childNode8),
+                                   SetUtils.toSet(leafNode4, leafNode5, leafNode6, leafNode7, leafNode8))
+                           .stream()
+                           .collect(Collectors.toList()),
+                     graph.routing()
+                          .withBreadthFirst()
+                          .budgetOptimized()
+                          .traverseOutgoing()
+                          .stream()
+                          .map(routes -> routes.stream()
+                                               .map(RouteAndTraversalControl::get)
+                                               .map(Route::last)
+                                               .map(Optional::get)
+                                               .map(Node::getIdentity)
+                                               .collect(Collectors.toSet()))
+                          .collect(Collectors.toList()));
     }
 
     @Test
@@ -532,6 +657,56 @@ public class GraphUtilsTest
             fail("Builder block should not be called again");
         });
         assertEquals(graph, graph2);
+    }
+
+    @Test
+    public void testHierarchy()
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1)
+                                .addEdge(rootNode, intermediateNode2)
+                                .addEdge(rootNode, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode2, childNode3)
+                                .build();
+
+        Hierarchy hierarchy = graph.routing()
+                                   .withBreadthFirst()
+                                   .traverseOutgoing(rootNode)
+                                   .asHierarchy();
+
+        //        System.out.println(hierarchy.asJsonWithData((node, data) -> data.put("id", node.get()
+        //                                                                                       .getIdentity())));
+        assertEquals(1, hierarchy.get()
+                                 .count());
+        assertEquals(rootNode, hierarchy.get()
+                                        .findFirst()
+                                        .get()
+                                        .get()
+                                        .getIdentity());
+        assertEquals(SetUtils.toSet(intermediateNode1, intermediateNode2, intermediateNode3), hierarchy.get()
+                                                                                                       .findFirst()
+                                                                                                       .get()
+                                                                                                       .getChildren()
+                                                                                                       .map(HierarchicalNode::get)
+                                                                                                       .map(Node::getIdentity)
+                                                                                                       .collect(Collectors.toSet()));
+        assertEquals(SetUtils.toSet(childNode1, childNode2, childNode3), hierarchy.get()
+                                                                                  .findFirst()
+                                                                                  .get()
+                                                                                  .getChildren()
+                                                                                  .flatMap(HierarchicalNode::getChildren)
+                                                                                  .map(HierarchicalNode::get)
+                                                                                  .map(Node::getIdentity)
+                                                                                  .collect(Collectors.toSet()));
     }
 
     private Consumer<GraphBuilder> createGraphPreparator()

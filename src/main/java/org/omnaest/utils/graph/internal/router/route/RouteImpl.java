@@ -15,143 +15,50 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.internal.router.route;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.ListUtils;
-import org.omnaest.utils.MapperUtils;
-import org.omnaest.utils.graph.domain.Edge;
 import org.omnaest.utils.graph.domain.Graph;
 import org.omnaest.utils.graph.domain.GraphRouter.Route;
-import org.omnaest.utils.graph.domain.Node;
+import org.omnaest.utils.graph.domain.GraphRouter.TraversedEdge;
+import org.omnaest.utils.graph.domain.GraphRouter.TraversedEdges;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 
-public class RouteImpl implements Route
+public class RouteImpl extends SimpleRouteImpl implements Route
 {
-    private List<NodeIdentity> route;
-    private Graph              graph;
+    private List<TraversedEdge> edges;
 
-    public RouteImpl(List<NodeIdentity> route, Graph graph)
+    public RouteImpl(List<NodeIdentity> route, List<TraversedEdge> edges, Graph graph)
     {
-        super();
-        this.route = route;
-        this.graph = graph;
+        super(route, graph);
+        this.edges = edges;
     }
 
     @Override
-    public List<NodeIdentity> toNodeIdentities()
+    public Optional<TraversedEdge> lastEdge()
     {
-        return Collections.unmodifiableList(this.route);
+        return ListUtils.optionalLast(this.edges);
     }
 
     @Override
-    public Route addToNew(NodeIdentity nodeIdentity)
+    public Optional<TraversedEdge> firstEdge()
     {
-        return new RouteImpl(ListUtils.addToNew(this.route, nodeIdentity), this.graph);
+        return ListUtils.optionalFirst(this.edges);
     }
 
     @Override
-    public Optional<Edge> lastEdge()
+    public TraversedEdges edges()
     {
-        return this.lastNth(1)
-                   .flatMap(incomingNode -> this.graph.findEdge(incomingNode.getIdentity(), this.last()
-                                                                                                .get()
-                                                                                                .getIdentity()));
-    }
-
-    @Override
-    public int hashCode()
-    {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + ((this.route == null) ? 0 : this.route.hashCode());
-        return result;
-    }
-
-    @Override
-    public boolean isCyclic()
-    {
-        Map<NodeIdentity, Long> nodeIdentityToCount = this.toNodeIdentities()
-                                                          .stream()
-                                                          .collect(Collectors.groupingBy(MapperUtils.identity(), Collectors.counting()));
-        return nodeIdentityToCount.values()
-                                  .stream()
-                                  .filter(count -> count > 1)
-                                  .findAny()
-                                  .isPresent();
-    }
-
-    @Override
-    public boolean equals(Object obj)
-    {
-        if (this == obj)
+        return new TraversedEdges()
         {
-            return true;
-        }
-        if (obj == null)
-        {
-            return false;
-        }
-        if (this.getClass() != obj.getClass())
-        {
-            return false;
-        }
-        RouteImpl other = (RouteImpl) obj;
-        if (this.route == null)
-        {
-            if (other.route != null)
+            @Override
+            public Stream<TraversedEdge> stream()
             {
-                return false;
+                return RouteImpl.this.edges.stream();
             }
-        }
-        else if (!this.route.equals(other.route))
-        {
-            return false;
-        }
-        return true;
-    }
-
-    @Override
-    public String toString()
-    {
-        return "<" + this.route + ">";
-    }
-
-    @Override
-    public Stream<Node> stream()
-    {
-        return this.route.stream()
-                         .map(this.createNodeIdentityToNodeMapper());
-    }
-
-    private Function<NodeIdentity, Node> createNodeIdentityToNodeMapper()
-    {
-        return nodeIdentity -> this.graph.findNodeById(nodeIdentity)
-                                         .get();
-    }
-
-    @Override
-    public Optional<Node> last()
-    {
-        return this.lastNth(0);
-    }
-
-    @Override
-    public Optional<Node> lastNth(int index)
-    {
-        return ListUtils.optionalLast(this.route, index)
-                        .map(this.createNodeIdentityToNodeMapper());
-    }
-
-    @Override
-    public Route getSubRouteUntilLastNth(int index)
-    {
-        return new RouteImpl(ListUtils.sublist(this.route, 0, this.route.size() - 1), this.graph);
+        };
     }
 
 }

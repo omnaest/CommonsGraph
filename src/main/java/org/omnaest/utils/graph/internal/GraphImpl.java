@@ -30,6 +30,7 @@ import org.omnaest.utils.OptionalUtils;
 import org.omnaest.utils.exception.handler.ExceptionHandler;
 import org.omnaest.utils.graph.domain.Edge;
 import org.omnaest.utils.graph.domain.Graph;
+import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.graph.domain.GraphResolver;
 import org.omnaest.utils.graph.domain.GraphRouter;
 import org.omnaest.utils.graph.domain.GraphSerializer;
@@ -204,6 +205,12 @@ public class GraphImpl implements Graph
                                       .flatMap(attributes -> OptionalUtils.both(this.findNodeById(from), this.findNodeById(to))
                                                                           .map(fromAndTo -> new EdgeImpl(fromAndTo.getFirst(), fromAndTo.getSecond(),
                                                                                                          attributes)));
+    }
+
+    @Override
+    public Optional<Edge> findEdge(EdgeIdentity edgeIdentity)
+    {
+        return this.findEdge(edgeIdentity.getFrom(), edgeIdentity.getTo());
     }
 
     private final class NodeIdentityJsonSerializer extends JsonSerializer<NodeIdentity>

@@ -19,6 +19,7 @@ import java.util.Collection;
 import java.util.Optional;
 
 import org.omnaest.utils.graph.GraphUtils;
+import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.stream.Streamable;
 
 /**
@@ -81,6 +82,14 @@ public interface Graph extends Streamable<Node>
     public Optional<Edge> findEdge(NodeIdentity from, NodeIdentity to);
 
     /**
+     * Similar to {@link #findEdge(NodeIdentity, NodeIdentity)}
+     * 
+     * @param edgeIdentity
+     * @return
+     */
+    public Optional<Edge> findEdge(EdgeIdentity edgeIdentity);
+
+    /**
      * Creates a {@link SubGraphBuilder} that allows to define a view on top of the current {@link Graph}.
      * 
      * @return
@@ -99,4 +108,5 @@ public interface Graph extends Streamable<Node>
 
         public Graph build();
     }
+
 }

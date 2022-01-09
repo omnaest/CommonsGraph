@@ -15,7 +15,9 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.domain;
 
+import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.graph.domain.GraphBuilder.NodeResolver;
@@ -63,4 +65,31 @@ public interface Node
      */
     public Node resolve();
 
+    public NodeDataAccessor getData();
+
+    public static interface NodeDataAccessor
+    {
+        public Optional<NodeDataFieldValueAccessor> getValue(String key);
+
+        public Map<String, Object> toMap();
+
+        /**
+         * Returns an {@link Object} instance where the field values are provided by the underlying data of the node.
+         * 
+         * @param type
+         * @return
+         */
+        public <T> T to(Class<T> type);
+    }
+
+    public static interface NodeDataFieldValueAccessor extends Supplier<Object>
+    {
+        public String getAsString();
+
+        public int getAsInteger();
+
+        public long getAsLong();
+
+        public double getAsDouble();
+    }
 }

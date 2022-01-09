@@ -21,12 +21,16 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Stream;
 
+import org.omnaest.utils.graph.domain.GraphRouter.Traversal.TraversalStepContext;
+import org.omnaest.utils.graph.internal.router.strategy.BreadthFirstRoutingStrategy.ColumnizedHierarchyNode;
 import org.omnaest.utils.stream.Streamable;
 
 public interface GraphRouter
@@ -103,6 +107,13 @@ public interface GraphRouter
          */
         public Traversal withAlreadyVisitedNodesHitHandler(TraversalRoutesConsumer routesConsumer);
 
+        /**
+         * Includes the first {@link Route} of a {@link Node} that is hit a second time, but doesn't follow any further pathes for that {@link Node}.
+         * 
+         * @return
+         */
+        public Traversal includingFirstRouteOfAlreadyVisitedNodes();
+
         public Traversal withWeightedPathTermination(double terminationWeightBarrier, NodeWeightDeterminationFunction nodeWeightDeterminationFunction);
 
         /**
@@ -137,7 +148,7 @@ public interface GraphRouter
 
         public static interface NodeWeightDeterminationFunction
         {
-            public double apply(Node node, Route route, OptionalDouble parentWeight);
+            public double apply(Node node, Route route, OptionalDouble parentWeight, ForwardNodeFunction forwardNodeFunction);
         }
 
         /**
@@ -173,22 +184,148 @@ public interface GraphRouter
         }
 
         /**
+         * {@link Stream} of the {@link TraversalRoutes}. Each {@link TraversalRoutes} encapsulates a single batch of {@link Node}s
+         * 
+         * @see #routes()
+         * @see #nodes()
+         */
+        @Override
+        public Stream<TraversalRoutes> stream();
+
+        /**
          * {@link Stream} of the routes returned by the traversal
          * 
+         * @see #nodes()
+         * @see #routesAndTraversalControls()
+         * @see #stream()
          * @return
          */
-        public Stream<RouteAndTraversalControl> routes();
+        public Stream<Route> routes();
+
+        /**
+         * {@link Stream} of the {@link RouteAndTraversalControl}s
+         * 
+         * @see #routes()
+         * @return
+         */
+        public Stream<RouteAndTraversalControl> routesAndTraversalControls();
+
+        /**
+         * {@link Stream} of {@link Node}s returned by the traversal cursor.
+         * 
+         * @see #stream()
+         * @see #routes()
+         * @return
+         */
+        public Stream<Node> nodes();
 
         public Hierarchy asHierarchy();
 
+        /**
+         * @see #andTraverseOutgoing()
+         * @see #andTraverse(Direction...)
+         * @return
+         */
+        public Traversal andTraverseIncoming();
+
+        /**
+         * @see #andTraverseIncoming()
+         * @see #andTraverse(Direction...)
+         * @return
+         */
+        public Traversal andTraverseOutgoing();
+
+        /**
+         * Defines secondary, tertiary, ... directions where nodes are traversed. E.g. if the primary direction is incoming and the secondary direction is
+         * outgoing, the start node is traversed in incoming direction and the start node and all discovered nodes by this process are traversed in the
+         * secondary/outgoing
+         * direction as well.<br>
+         * <br>
+         * Multiple given directions define the different node bags and their traversal direction, where every processed node from an earlier bag will be pushed
+         * into the next bag.
+         * <br>
+         * <br>
+         * The inclusion filter allows to limit the nodes passed to the next bag of nodes.
+         * 
+         * @see #andTraverse(Direction...)
+         * @param filter
+         * @param directions
+         * @return
+         */
+        public Traversal andTraverse(TraversalStepFilter filter, Direction... directions);
+
+        /**
+         * Similar to {@link #andTraverse(BiPredicate, Direction...)} without the ability to define a filter.
+         * 
+         * @see #andTraverse(BiPredicate, Direction...)
+         * @see #andTraverseIncoming()
+         * @see #andTraverseOutgoing()
+         * @return
+         */
+        public Traversal andTraverse(Direction... directions);
+
+        /**
+         * Inclusion filter for a node to be passed downwards to another processing step/bag
+         * 
+         * @author omnaest
+         */
+        public static interface TraversalStepFilter extends BiPredicate<Node, TraversalStepContext>
+        {
+
+        }
+
+        public static interface TraversalStepContext
+        {
+            /**
+             * Returns the current step which is 0,1,2,... and increasing with the node passing each and every bag
+             * 
+             * @return
+             */
+            public int getStep();
+
+            public Direction getDirection();
+
+            public ForwardNodeFunction getForwardNodeFunction();
+
+            /**
+             * Returns true, if this is the primary/first traversal step
+             * 
+             * @return
+             */
+            public default boolean isPrimaryStep()
+            {
+                return this.getStep() == 0;
+            }
+        }
+
     }
 
-    public static interface Hierarchy extends Supplier<Stream<HierarchicalNode>>
+    /**
+     * {@link Function} that transforms a given {@link Node} into the next {@link Nodes} based on the underlying {@link Direction}
+     * 
+     * @author omnaest
+     */
+    public static interface ForwardNodeFunction extends Function<Node, Nodes>
     {
+    }
+
+    /**
+     * @see #stream()
+     * @author omnaest
+     */
+    public static interface Hierarchy extends Streamable<HierarchicalNode>
+    {
+        /**
+         * Returns the root {@link HierarchicalNode}s.
+         */
+        @Override
+        public Stream<HierarchicalNode> stream();
 
         public String asJson();
 
         public String asJsonWithData(BiConsumer<HierarchicalNode, DataBuilder> nodeAndDataBuilderConsumer);
+
+        public Stream<ColumnizedHierarchyNode> asColumnizedNodes();
 
     }
 
@@ -259,6 +396,8 @@ public interface GraphRouter
         public RouteAndTraversalControl skipNextRouteNodes(NodeIdentity... nodeIdentities);
 
         public RouteAndTraversalControl skipNextRouteNodes(Collection<NodeIdentity> nodeIdentities);
+
+        public TraversalStepContext getTraversalStepContext();
     }
 
     public static interface Routes extends Streamable<Route>
@@ -301,6 +440,8 @@ public interface GraphRouter
         public Optional<Node> lastNth(int index);
 
         public boolean isCyclic();
+
+        public boolean isNotCyclic();
 
         /**
          * Adds a new {@link NodeIdentity} to the existing {@link Route} nodes and returns a new {@link Route} instance with that appended {@link NodeIdentity}.

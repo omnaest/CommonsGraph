@@ -247,6 +247,11 @@ public class NodeIdentity implements Supplier<List<String>>
         {
             return this.id.map(identifier -> Enum.valueOf(enumType, identifier));
         }
+
+        public Optional<Boolean> booleanValue()
+        {
+            return this.id.map(Boolean::valueOf);
+        }
     }
 
 }

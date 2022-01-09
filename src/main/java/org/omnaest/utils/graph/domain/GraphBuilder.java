@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -91,6 +92,8 @@ public interface GraphBuilder
      * @return
      */
     public GraphBuilder addNode(NodeIdentity nodeIdentity);
+
+    public GraphBuilder addNodeWithData(NodeIdentity nodeIdentity, Consumer<NodeDataBuilder> nodeDataBuilderConsumer);
 
     public GraphBuilder addNodes(Collection<NodeIdentity> nodeIdentities);
 
@@ -273,5 +276,22 @@ public interface GraphBuilder
         {
             return Collections.newSetFromMap(this.createMap(name));
         }
+    }
+
+    public static interface NodeDataBuilder
+    {
+        public NodeDataBuilder put(String key, Object value);
+
+        public NodeDataBuilder putAll(Map<String, Object> map);
+
+        public NodeDataBuilder clear();
+
+        /**
+         * Puts data based on the properties and property values of an {@link Object} instance
+         * 
+         * @param object
+         * @return
+         */
+        public NodeDataBuilder putFrom(Object object);
     }
 }

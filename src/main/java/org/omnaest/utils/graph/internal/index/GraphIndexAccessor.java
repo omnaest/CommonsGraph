@@ -5,6 +5,7 @@ import java.util.Set;
 
 import org.omnaest.utils.graph.domain.Attribute;
 import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.NodeData;
 import org.omnaest.utils.graph.internal.index.filter.GraphNodesFilter;
 
 public class GraphIndexAccessor
@@ -120,6 +121,11 @@ public class GraphIndexAccessor
             return false;
         }
         return true;
+    }
+
+    public Optional<NodeData> getNodeData(NodeIdentity nodeIdentity)
+    {
+        return this.graphIndex.getNodeData(nodeIdentity);
     }
 
 }

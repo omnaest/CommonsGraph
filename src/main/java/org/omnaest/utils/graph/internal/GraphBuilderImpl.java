@@ -20,11 +20,14 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import org.omnaest.utils.JSONHelper;
 import org.omnaest.utils.MapperUtils;
 import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.graph.domain.Attribute;
@@ -33,6 +36,7 @@ import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.domain.Tag;
 import org.omnaest.utils.graph.internal.index.GraphIndex;
+import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.NodeData;
 import org.omnaest.utils.graph.internal.index.filter.GraphNodesFilter;
 
 public class GraphBuilderImpl implements GraphBuilder
@@ -59,6 +63,53 @@ public class GraphBuilderImpl implements GraphBuilder
         this.graphIndexContext.getGraphIndex()
                               .addNode(nodeIdentity);
         return this;
+    }
+
+    @Override
+    public GraphBuilder addNodeWithData(NodeIdentity nodeIdentity, Consumer<NodeDataBuilder> nodeDataBuilderConsumer)
+    {
+        NodeData nodeData = this.graphIndexContext.getGraphIndex()
+                                                  .attachNodeDataToNodeAndGet(nodeIdentity);
+        nodeDataBuilderConsumer.accept(this.createNodeDataBuilder(nodeData));
+        this.graphIndexContext.getGraphIndex()
+                              .updateNodeData(nodeIdentity, nodeData);
+        return this.addNode(nodeIdentity);
+    }
+
+    private NodeDataBuilder createNodeDataBuilder(NodeData nodeData)
+    {
+        return new NodeDataBuilder()
+        {
+            @Override
+            public NodeDataBuilder put(String key, Object value)
+            {
+                nodeData.getData()
+                        .put(key, value);
+                return this;
+            }
+
+            @Override
+            public NodeDataBuilder putAll(Map<String, Object> map)
+            {
+                nodeData.getData()
+                        .putAll(map);
+                return this;
+            }
+
+            @Override
+            public NodeDataBuilder clear()
+            {
+                nodeData.getData()
+                        .clear();
+                return this;
+            }
+
+            @Override
+            public NodeDataBuilder putFrom(Object object)
+            {
+                return this.putAll(JSONHelper.toMap(object));
+            }
+        };
     }
 
     @Override

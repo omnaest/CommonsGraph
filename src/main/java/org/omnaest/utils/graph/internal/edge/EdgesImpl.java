@@ -71,4 +71,14 @@ public class EdgesImpl implements Edges
         return true;
     }
 
+    @Override
+    public String toString()
+    {
+        StringBuilder builder = new StringBuilder();
+        builder.append("EdgesImpl [edges=")
+               .append(this.edges)
+               .append("]");
+        return builder.toString();
+    }
+
 }

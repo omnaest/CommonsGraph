@@ -28,6 +28,8 @@ import org.omnaest.utils.graph.domain.NodeIdentity;
 import org.omnaest.utils.graph.internal.GraphImpl;
 import org.omnaest.utils.graph.internal.index.components.GraphEdgesIndex;
 import org.omnaest.utils.graph.internal.index.components.GraphIdentityTokenIndex;
+import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex;
+import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.NodeData;
 import org.omnaest.utils.json.AbstractJSONSerializable;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -52,11 +54,15 @@ public class GraphIndex extends AbstractJSONSerializable
     @JsonProperty
     private Set<NodeIdentity> unresolvedNodes;
 
+    @JsonProperty
+    private GraphNodeDataIndex graphNodeDataIndex;
+
     public GraphIndex(RepositoryProvider repositoryProvider)
     {
         super();
         this.graphIdentityTokenIndex = new GraphIdentityTokenIndex(repositoryProvider);
         this.graphEdgesIndex = new GraphEdgesIndex(repositoryProvider);
+        this.graphNodeDataIndex = new GraphNodeDataIndex(repositoryProvider);
         this.nodes = repositoryProvider.createSet("nodes");
         this.unresolvedNodes = repositoryProvider.createSet("unresolvedNodes");
     }
@@ -241,6 +247,22 @@ public class GraphIndex extends AbstractJSONSerializable
     public Optional<Set<Attribute>> getEdgeAttributes(NodeIdentity from, NodeIdentity to)
     {
         return this.graphEdgesIndex.getEdge(from, to);
+    }
+
+    public NodeData attachNodeDataToNodeAndGet(NodeIdentity nodeIdentity)
+    {
+        return this.graphNodeDataIndex.attachNodeDataToNodeAndGet(nodeIdentity);
+    }
+
+    public GraphIndex updateNodeData(NodeIdentity nodeIdentity, NodeData nodeData)
+    {
+        this.graphNodeDataIndex.updateNodeData(nodeIdentity, nodeData);
+        return this;
+    }
+
+    public Optional<NodeData> getNodeData(NodeIdentity nodeIdentity)
+    {
+        return this.graphNodeDataIndex.getNodeData(nodeIdentity);
     }
 
 }

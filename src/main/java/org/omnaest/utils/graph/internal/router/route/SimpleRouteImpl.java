@@ -81,6 +81,12 @@ public class SimpleRouteImpl implements SimpleRoute
     }
 
     @Override
+    public boolean isNotCyclic()
+    {
+        return !this.isCyclic();
+    }
+
+    @Override
     public boolean equals(Object obj)
     {
         if (this == obj)

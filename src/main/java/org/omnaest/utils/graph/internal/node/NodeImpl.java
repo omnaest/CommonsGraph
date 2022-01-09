@@ -16,11 +16,14 @@
 package org.omnaest.utils.graph.internal.node;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.omnaest.utils.JSONHelper;
 import org.omnaest.utils.graph.domain.Attribute;
 import org.omnaest.utils.graph.domain.Edge;
 import org.omnaest.utils.graph.domain.Edges;
@@ -32,6 +35,7 @@ import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
 import org.omnaest.utils.graph.internal.edge.EdgeImpl;
 import org.omnaest.utils.graph.internal.edge.EdgesImpl;
 import org.omnaest.utils.graph.internal.index.GraphIndexAccessor;
+import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.NodeData;
 
 /**
  * @see Node
@@ -199,6 +203,72 @@ public class NodeImpl implements Node
         return Stream.of(this.findIncomingEdgeFrom(nodeIdentity), this.findOutgoingEdgeTo(nodeIdentity))
                      .filter(Optional::isPresent)
                      .map(Optional::get);
+    }
+
+    @Override
+    public NodeDataAccessor getData()
+    {
+        Optional<NodeData> nodeData = this.graphIndexAccessor.getNodeData(this.nodeIdentity);
+        return new NodeDataAccessor()
+        {
+            @Override
+            public Map<String, Object> toMap()
+            {
+                return nodeData.map(NodeData::getData)
+                               .map(Collections::unmodifiableMap)
+                               .orElse(Collections.emptyMap());
+            }
+
+            @Override
+            public <T> T to(Class<T> type)
+            {
+                return JSONHelper.toObjectWithType(this.toMap(), type);
+            }
+
+            @Override
+            public Optional<NodeDataFieldValueAccessor> getValue(String fieldName)
+            {
+                return Optional.ofNullable(this.toMap()
+                                               .get(fieldName))
+                               .map(this.createNodeDataFieldValueAccessor());
+            }
+
+            private Function<Object, NodeDataFieldValueAccessor> createNodeDataFieldValueAccessor()
+            {
+                return value -> new NodeDataFieldValueAccessor()
+                {
+                    @Override
+                    public Object get()
+                    {
+                        return value;
+                    }
+
+                    @Override
+                    public String getAsString()
+                    {
+                        return String.valueOf(this.get());
+                    }
+
+                    @Override
+                    public long getAsLong()
+                    {
+                        return (long) value;
+                    }
+
+                    @Override
+                    public int getAsInteger()
+                    {
+                        return (int) value;
+                    }
+
+                    @Override
+                    public double getAsDouble()
+                    {
+                        return (double) value;
+                    }
+                };
+            }
+        };
     }
 
 }

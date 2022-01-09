@@ -1,4 +1,4 @@
-package org.omnaest.utils.graph.domain;
+package org.omnaest.utils.graph.domain.edge;
 
 import org.omnaest.utils.stream.Streamable;
 

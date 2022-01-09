@@ -4,7 +4,7 @@ import java.io.IOException;
 
 import org.omnaest.utils.JSONHelper;
 import org.omnaest.utils.exception.handler.ExceptionHandler;
-import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
 
 import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.KeyDeserializer;

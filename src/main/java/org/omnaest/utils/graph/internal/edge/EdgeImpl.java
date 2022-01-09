@@ -7,12 +7,12 @@ import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.element.bi.UnaryBiElement;
-import org.omnaest.utils.graph.domain.Attribute;
-import org.omnaest.utils.graph.domain.Edge;
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
-import org.omnaest.utils.graph.domain.Node;
-import org.omnaest.utils.graph.domain.NodeIdentity;
-import org.omnaest.utils.graph.domain.Tag;
+import org.omnaest.utils.graph.domain.attributes.Attribute;
+import org.omnaest.utils.graph.domain.attributes.Tag;
+import org.omnaest.utils.graph.domain.edge.Edge;
+import org.omnaest.utils.graph.domain.node.Node;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
 
 public class EdgeImpl implements Edge
 {

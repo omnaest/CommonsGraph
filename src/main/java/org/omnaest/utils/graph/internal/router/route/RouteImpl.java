@@ -21,10 +21,10 @@ import java.util.stream.Stream;
 
 import org.omnaest.utils.ListUtils;
 import org.omnaest.utils.graph.domain.Graph;
-import org.omnaest.utils.graph.domain.GraphRouter.Route;
-import org.omnaest.utils.graph.domain.GraphRouter.TraversedEdge;
-import org.omnaest.utils.graph.domain.GraphRouter.TraversedEdges;
-import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
+import org.omnaest.utils.graph.domain.traversal.Route;
+import org.omnaest.utils.graph.domain.traversal.TraversedEdge;
+import org.omnaest.utils.graph.domain.traversal.TraversedEdges;
 
 public class RouteImpl extends SimpleRouteImpl implements Route
 {

@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.omnaest.utils.MapperUtils;
 import org.omnaest.utils.graph.domain.GraphBuilder.RepositoryProvider;
-import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
 import org.omnaest.utils.json.AbstractJSONSerializable;
 
 import com.fasterxml.jackson.annotation.JsonCreator;

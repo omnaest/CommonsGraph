@@ -27,6 +27,10 @@ import java.util.stream.Stream;
 
 import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.functional.TriFunction;
+import org.omnaest.utils.graph.domain.attributes.Attribute;
+import org.omnaest.utils.graph.domain.attributes.Tag;
+import org.omnaest.utils.graph.domain.node.Node;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
 
 public interface GraphBuilder
 {

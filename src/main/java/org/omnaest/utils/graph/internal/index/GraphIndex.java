@@ -21,10 +21,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.omnaest.utils.graph.domain.Attribute;
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.graph.domain.GraphBuilder.RepositoryProvider;
-import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.attributes.Attribute;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
 import org.omnaest.utils.graph.internal.GraphImpl;
 import org.omnaest.utils.graph.internal.index.components.GraphEdgesIndex;
 import org.omnaest.utils.graph.internal.index.components.GraphIdentityTokenIndex;

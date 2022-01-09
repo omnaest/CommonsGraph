@@ -19,9 +19,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import org.omnaest.utils.graph.domain.Node;
-import org.omnaest.utils.graph.domain.NodeIdentity;
-import org.omnaest.utils.graph.domain.Nodes;
+import org.omnaest.utils.graph.domain.node.Node;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
+import org.omnaest.utils.graph.domain.node.Nodes;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
 import org.omnaest.utils.graph.internal.index.GraphIndexAccessor;
 

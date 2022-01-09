@@ -20,6 +20,10 @@ import java.util.Optional;
 
 import org.omnaest.utils.graph.GraphUtils;
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
+import org.omnaest.utils.graph.domain.edge.Edge;
+import org.omnaest.utils.graph.domain.node.Node;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
+import org.omnaest.utils.graph.domain.node.Nodes;
 import org.omnaest.utils.stream.Streamable;
 
 /**

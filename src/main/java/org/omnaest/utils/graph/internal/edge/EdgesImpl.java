@@ -3,8 +3,8 @@ package org.omnaest.utils.graph.internal.edge;
 import java.util.List;
 import java.util.stream.Stream;
 
-import org.omnaest.utils.graph.domain.Edge;
-import org.omnaest.utils.graph.domain.Edges;
+import org.omnaest.utils.graph.domain.edge.Edge;
+import org.omnaest.utils.graph.domain.edge.Edges;
 
 /**
  * @see Edges

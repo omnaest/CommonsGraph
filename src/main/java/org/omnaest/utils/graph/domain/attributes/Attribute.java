@@ -1,4 +1,4 @@
-package org.omnaest.utils.graph.domain;
+package org.omnaest.utils.graph.domain.attributes;
 
 import java.util.Arrays;
 import java.util.Collection;

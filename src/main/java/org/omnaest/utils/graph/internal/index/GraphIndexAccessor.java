@@ -3,8 +3,8 @@ package org.omnaest.utils.graph.internal.index;
 import java.util.Optional;
 import java.util.Set;
 
-import org.omnaest.utils.graph.domain.Attribute;
-import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.attributes.Attribute;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
 import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.NodeData;
 import org.omnaest.utils.graph.internal.index.filter.GraphNodesFilter;
 

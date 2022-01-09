@@ -1,5 +1,7 @@
 package org.omnaest.utils.graph.domain;
 
+import org.omnaest.utils.graph.domain.node.Node;
+
 /**
  * A {@link GraphResolver} allows to resolve {@link Node}s which are lazy loaded.
  * 

@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  ******************************************************************************/
-package org.omnaest.utils.graph.domain;
+package org.omnaest.utils.graph.domain.node;
 
 import java.util.ArrayList;
 import java.util.Arrays;

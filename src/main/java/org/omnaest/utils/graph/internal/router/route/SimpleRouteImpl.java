@@ -26,9 +26,9 @@ import java.util.stream.Stream;
 import org.omnaest.utils.ListUtils;
 import org.omnaest.utils.MapperUtils;
 import org.omnaest.utils.graph.domain.Graph;
-import org.omnaest.utils.graph.domain.GraphRouter.SimpleRoute;
-import org.omnaest.utils.graph.domain.Node;
-import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.node.Node;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
+import org.omnaest.utils.graph.domain.traversal.SimpleRoute;
 
 /**
  * @see RouteImpl

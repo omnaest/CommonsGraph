@@ -13,10 +13,11 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  ******************************************************************************/
-package org.omnaest.utils.graph.domain;
+package org.omnaest.utils.graph.domain.node;
 
 import java.util.Optional;
 
+import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.GraphBuilder.MultiNodeResolver;
 import org.omnaest.utils.stream.Streamable;
 

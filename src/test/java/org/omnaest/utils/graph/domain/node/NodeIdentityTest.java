@@ -1,9 +1,10 @@
-package org.omnaest.utils.graph.domain;
+package org.omnaest.utils.graph.domain.node;
 
 import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 import org.omnaest.utils.JSONHelper;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
 
 /**
  * @see NodeIdentity

@@ -1,4 +1,4 @@
-package org.omnaest.utils.graph.domain;
+package org.omnaest.utils.graph.domain.attributes;
 
 /**
  * Special {@link Attribute} which does not define a value and only defines a key.

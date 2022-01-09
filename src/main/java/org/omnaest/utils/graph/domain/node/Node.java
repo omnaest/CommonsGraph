@@ -13,14 +13,19 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  ******************************************************************************/
-package org.omnaest.utils.graph.domain;
+package org.omnaest.utils.graph.domain.node;
 
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import org.omnaest.utils.graph.domain.Graph;
+import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.GraphBuilder.NodeResolver;
+import org.omnaest.utils.graph.domain.attributes.Tag;
+import org.omnaest.utils.graph.domain.edge.Edge;
+import org.omnaest.utils.graph.domain.edge.Edges;
 
 /**
  * @author omnaest

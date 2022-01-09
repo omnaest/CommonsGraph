@@ -5,7 +5,7 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 import org.omnaest.utils.SetUtils;
-import org.omnaest.utils.graph.domain.NodeIdentity;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
 
 public class GraphNodesFilter implements Predicate<NodeIdentity>
 {

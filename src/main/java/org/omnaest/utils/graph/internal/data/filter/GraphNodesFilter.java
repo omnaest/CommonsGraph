@@ -1,6 +1,6 @@
-package org.omnaest.utils.graph.internal.index.filter;
+package org.omnaest.utils.graph.internal.data.filter;
 
-import java.util.Collections;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -9,10 +9,10 @@ import org.omnaest.utils.graph.domain.node.NodeIdentity;
 
 public class GraphNodesFilter implements Predicate<NodeIdentity>
 {
-    private Set<NodeIdentity> excludedNodes;
-    private Set<NodeIdentity> includedNodes;
+    private Optional<Set<NodeIdentity>> excludedNodes;
+    private Optional<Set<NodeIdentity>> includedNodes;
 
-    public GraphNodesFilter(Set<NodeIdentity> excludedNodes, Set<NodeIdentity> includedNodes)
+    public GraphNodesFilter(Optional<Set<NodeIdentity>> excludedNodes, Optional<Set<NodeIdentity>> includedNodes)
     {
         super();
         this.excludedNodes = excludedNodes;
@@ -21,22 +21,24 @@ public class GraphNodesFilter implements Predicate<NodeIdentity>
 
     public static GraphNodesFilter empty()
     {
-        return new GraphNodesFilter(Collections.emptySet(), Collections.emptySet());
+        return new GraphNodesFilter(Optional.empty(), Optional.empty());
     }
 
     @Override
     public boolean test(NodeIdentity nodeIdentity)
     {
-        boolean excludeNone = this.excludedNodes.isEmpty();
-        boolean isExcluded = !excludeNone && this.excludedNodes.contains(nodeIdentity);
-        boolean includeAll = this.includedNodes.isEmpty();
-        boolean isIncluded = includeAll || this.includedNodes.contains(nodeIdentity);
+        boolean excludeNone = !this.excludedNodes.isPresent();
+        boolean isExcluded = !excludeNone && this.excludedNodes.get()
+                                                               .contains(nodeIdentity);
+        boolean includeAll = !this.includedNodes.isPresent();
+        boolean isIncluded = includeAll || this.includedNodes.get()
+                                                             .contains(nodeIdentity);
         return !isExcluded && isIncluded;
     }
 
     private boolean hasFilter()
     {
-        return !this.includedNodes.isEmpty() || !this.excludedNodes.isEmpty();
+        return this.includedNodes.isPresent() || this.excludedNodes.isPresent();
     }
 
     public Set<NodeIdentity> getFilteredNodeIdentities(Set<NodeIdentity> nodeIdentities)

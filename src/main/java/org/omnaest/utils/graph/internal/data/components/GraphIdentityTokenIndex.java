@@ -13,7 +13,7 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  ******************************************************************************/
-package org.omnaest.utils.graph.internal.index.components;
+package org.omnaest.utils.graph.internal.data.components;
 
 import java.util.Collections;
 import java.util.Map;

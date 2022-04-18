@@ -15,6 +15,7 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.domain;
 
+import java.util.Collection;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -72,11 +73,13 @@ public interface GraphRouter
 
         public RoutingStrategy budgetOptimized();
 
-        public Traversal traverseIncoming(Set<NodeIdentity> startNodes);
+        public Traversal traverseIncoming(NodeIdentity... startNodes);
+
+        public Traversal traverseIncoming(Collection<NodeIdentity> startNodes);
 
         public Traversal traverseIncoming();
 
-        public Traversal traverseOutgoing(Set<NodeIdentity> startNodes);
+        public Traversal traverseOutgoing(Collection<NodeIdentity> startNodes);
 
         public Traversal traverseOutgoing(NodeIdentity... startNodes);
 
@@ -86,7 +89,18 @@ public interface GraphRouter
 
         public Traversal traverse(Direction direction, Set<NodeIdentity> startNodes);
 
-        public Traversal traverseIncoming(NodeIdentity... startNodes);
+        /**
+         * Traverses the {@link Graph} but keeps the subgraph traversal from all startnodes in a distinct context, which means the same nodes and pathes can be
+         * traversed twice, if they are on a route that originates from at least two start nodes.
+         * 
+         * @see Traversal#withOwnContext()
+         * @param direction
+         * @param startNodes
+         * @return
+         */
+        public Traversal traverseEach(Direction direction, NodeIdentity... startNodes);
+
+        public Traversal traverseEach(Direction direction, Collection<NodeIdentity> startNodes);
 
     }
 

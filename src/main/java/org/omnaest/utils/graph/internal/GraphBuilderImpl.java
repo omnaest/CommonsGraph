@@ -35,9 +35,9 @@ import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.attributes.Attribute;
 import org.omnaest.utils.graph.domain.attributes.Tag;
 import org.omnaest.utils.graph.domain.node.NodeIdentity;
-import org.omnaest.utils.graph.internal.index.GraphIndex;
-import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.NodeData;
-import org.omnaest.utils.graph.internal.index.filter.GraphNodesFilter;
+import org.omnaest.utils.graph.internal.data.GraphDataIndex;
+import org.omnaest.utils.graph.internal.data.components.GraphNodeDataIndex.NodeData;
+import org.omnaest.utils.graph.internal.data.filter.GraphNodesFilter;
 
 public class GraphBuilderImpl implements GraphBuilder
 {
@@ -121,11 +121,28 @@ public class GraphBuilderImpl implements GraphBuilder
     }
 
     @Override
+    public GraphBuilder addNodes(NodeIdentity... nodeIdentities)
+    {
+        return this.addNodes(Optional.ofNullable(nodeIdentities)
+                                     .map(Arrays::asList)
+                                     .orElse(Collections.emptyList()));
+    }
+
+    @Override
     public GraphBuilder addEdge(NodeIdentity from, NodeIdentity to)
     {
         this.graphIndexContext.getGraphIndex()
                               .addEdge(from, to);
         return this;
+    }
+
+    public GraphBuilder addEdgeWithAttributes(EdgeIdentityWithAttributes edge)
+    {
+        return this.addEdgeWithAttributes(edge.getEdgeIdentity()
+                                              .getFrom(),
+                                          edge.getEdgeIdentity()
+                                              .getTo(),
+                                          edge.getAttributes());
     }
 
     @Override
@@ -147,6 +164,24 @@ public class GraphBuilderImpl implements GraphBuilder
     {
         this.graphIndexContext.getGraphIndex()
                               .addEdge(edgeIdentity);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder addEdges(Iterable<EdgeIdentity> edgeIdentities)
+    {
+        Optional.ofNullable(edgeIdentities)
+                .orElse(Collections.emptyList())
+                .forEach(this::addEdge);
+        return this;
+    }
+
+    @Override
+    public GraphBuilder addEdgesWithAttributes(Iterable<EdgeIdentityWithAttributes> edgeIdentities)
+    {
+        Optional.ofNullable(edgeIdentities)
+                .orElse(Collections.emptyList())
+                .forEach(this::addEdgeWithAttributes);
         return this;
     }
 
@@ -181,6 +216,19 @@ public class GraphBuilderImpl implements GraphBuilder
     }
 
     @Override
+    public GraphBuilder addGraph(Graph graph)
+    {
+        if (graph != null)
+        {
+            this.addNodes(graph.nodes()
+                               .identities())
+                .addEdgesWithAttributes(graph.edges()
+                                             .identitiesWithAttributes());
+        }
+        return this;
+    }
+
+    @Override
     public Graph build()
     {
         return new GraphImpl(this.graphIndexContext.getGraphIndex(), this.graphIndexContext.getNodeResolverSupport(), GraphNodesFilter.empty());
@@ -212,17 +260,17 @@ public class GraphBuilderImpl implements GraphBuilder
 
     private static class GraphIndexContext
     {
-        private final GraphIndex          graphIndex;
+        private final GraphDataIndex      graphIndex;
         private final NodeResolverSupport nodeResolverSupport;
 
         public GraphIndexContext(RepositoryProvider repositoryProvider)
         {
             super();
-            this.graphIndex = new GraphIndex(repositoryProvider);
+            this.graphIndex = new GraphDataIndex(repositoryProvider);
             this.nodeResolverSupport = new NodeResolverSupport(this.graphIndex);
         }
 
-        public GraphIndex getGraphIndex()
+        public GraphDataIndex getGraphIndex()
         {
             return this.graphIndex;
         }
@@ -237,9 +285,9 @@ public class GraphBuilderImpl implements GraphBuilder
     public static class NodeResolverSupport
     {
         private List<MultiNodeResolver> nodeResolvers = new ArrayList<>();
-        private GraphIndex              graphIndex;
+        private GraphDataIndex          graphIndex;
 
-        public NodeResolverSupport(GraphIndex graphIndex)
+        public NodeResolverSupport(GraphDataIndex graphIndex)
         {
             this.graphIndex = graphIndex;
         }

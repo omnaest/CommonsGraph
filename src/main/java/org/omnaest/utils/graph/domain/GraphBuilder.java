@@ -15,9 +15,11 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.domain;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -29,6 +31,7 @@ import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.functional.TriFunction;
 import org.omnaest.utils.graph.domain.attributes.Attribute;
 import org.omnaest.utils.graph.domain.attributes.Tag;
+import org.omnaest.utils.graph.domain.edge.Edge;
 import org.omnaest.utils.graph.domain.node.Node;
 import org.omnaest.utils.graph.domain.node.NodeIdentity;
 
@@ -53,6 +56,22 @@ public interface GraphBuilder
      * @return
      */
     public GraphBuilder addEdge(EdgeIdentity edgeIdentity);
+
+    /**
+     * Similar to {@link #addEdge(EdgeIdentity)} for a batch of {@link EdgeIdentity}s
+     * 
+     * @param edgeIdentities
+     * @return
+     */
+    public GraphBuilder addEdges(Iterable<EdgeIdentity> edgeIdentities);
+
+    /**
+     * Similar to {@link #addEdgeWithAttributes(NodeIdentity, NodeIdentity, Collection)} for a batch of {@link EdgeIdentityWithAttributes}
+     * 
+     * @param edgeIdentities
+     * @return
+     */
+    public GraphBuilder addEdgesWithAttributes(Iterable<EdgeIdentityWithAttributes> edgeIdentities);
 
     /**
      * Similar to {@link #addEdge(NodeIdentity, NodeIdentity)} but allows to bind a given {@link Collection} of {@link Attribute}s to an edge.
@@ -101,11 +120,21 @@ public interface GraphBuilder
 
     public GraphBuilder addNodes(Collection<NodeIdentity> nodeIdentities);
 
+    public GraphBuilder addNodes(NodeIdentity... nodeIdentities);
+
     public GraphBuilder withSingleNodeResolver(SingleNodeResolver nodeResolver);
 
     public GraphBuilder withBidirectionalSingleNodeResolver(SingleNodeResolver nodeResolver);
 
     public GraphBuilder withMultiNodeResolver(MultiNodeResolver nodeResolver);
+
+    /**
+     * Adds another {@link Graph} with all {@link Node}s and {@link Edge}s
+     * 
+     * @param graph
+     * @return
+     */
+    public GraphBuilder addGraph(Graph graph);
 
     /**
      * Builds a {@link Graph} instance
@@ -170,6 +199,54 @@ public interface GraphBuilder
                                   .map(edges -> edges.collect(Collectors.toSet()))
                                   .orElse(Collections.emptySet());
         }
+    }
+
+    public static class EdgeIdentityWithAttributes
+    {
+        private EdgeIdentity          edgeIdentity;
+        private Collection<Attribute> attributes;
+
+        private EdgeIdentityWithAttributes(EdgeIdentity edgeIdentity, Collection<Attribute> attributes)
+        {
+            super();
+            this.edgeIdentity = edgeIdentity;
+            this.attributes = attributes;
+        }
+
+        public static EdgeIdentityWithAttributes of(NodeIdentity from, NodeIdentity to, Attribute... attributes)
+        {
+            return of(from, to, Optional.ofNullable(attributes)
+                                        .map(Arrays::asList)
+                                        .orElse(Collections.emptyList()));
+        }
+
+        public static EdgeIdentityWithAttributes of(NodeIdentity from, NodeIdentity to, Collection<Attribute> attributes)
+        {
+            return new EdgeIdentityWithAttributes(EdgeIdentity.of(from, to), attributes);
+        }
+
+        public EdgeIdentity getEdgeIdentity()
+        {
+            return edgeIdentity;
+        }
+
+        public Collection<Attribute> getAttributes()
+        {
+            return attributes;
+        }
+
+        @Override
+        public String toString()
+        {
+            StringBuilder builder = new StringBuilder();
+            builder.append("EdgeIdentityAndAttributes [edgeIdentity=")
+                   .append(edgeIdentity)
+                   .append(", attributes=")
+                   .append(attributes)
+                   .append("]");
+            return builder.toString();
+        }
+
     }
 
     public static class EdgeIdentity
@@ -266,6 +343,27 @@ public interface GraphBuilder
             return true;
         }
 
+        /**
+         * Returns a {@link Stream} containing the {@link #getFrom()} and {@link #getTo()} {@link NodeIdentity}s
+         * 
+         * @return
+         */
+        public Stream<NodeIdentity> stream()
+        {
+            return Stream.of(this.from, this.to);
+        }
+
+        /**
+         * Returns true, if this {@link EdgeIdentity} contains the given {@link NodeIdentity} as from or to.
+         * 
+         * @param nodeIdentity
+         * @return
+         */
+        public boolean contains(NodeIdentity nodeIdentity)
+        {
+            return Objects.equals(this.from, nodeIdentity) || Objects.equals(this.to, nodeIdentity);
+        }
+
     }
 
     public static interface RepositoryProvider extends TriFunction<String, Class<?>, Class<?>, Map<?, ?>>
@@ -298,4 +396,5 @@ public interface GraphBuilder
          */
         public NodeDataBuilder putFrom(Object object);
     }
+
 }

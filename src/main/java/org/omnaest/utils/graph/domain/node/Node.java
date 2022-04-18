@@ -21,7 +21,6 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.graph.domain.Graph;
-import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.GraphBuilder.NodeResolver;
 import org.omnaest.utils.graph.domain.attributes.Tag;
 import org.omnaest.utils.graph.domain.edge.Edge;
@@ -37,6 +36,13 @@ public interface Node
     public Nodes getOutgoingNodes();
 
     public Nodes getIncomingNodes();
+
+    /**
+     * Returns all {@link #getIncomingNodes() and all #getOutgoingNodes()
+     * 
+     * @return
+     */
+    public Nodes getConnectedNodes();
 
     public Edges getOutgoingEdges();
 
@@ -97,4 +103,12 @@ public interface Node
 
         public double getAsDouble();
     }
+
+    /**
+     * Returns true, if this {@link Node} has no {@link Edge} to any other {@link Node}
+     * 
+     * @return
+     */
+    public boolean isDetached();
+
 }

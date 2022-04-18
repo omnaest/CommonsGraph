@@ -53,6 +53,18 @@ public class Attribute
         return this.values;
     }
 
+    public Optional<Tag> asTag()
+    {
+        if (this.values == null)
+        {
+            return Optional.of(Tag.of(this.key));
+        }
+        else
+        {
+            return Optional.empty();
+        }
+    }
+
     public static Attribute of(String key, String value)
     {
         return new Attribute(key, Arrays.asList(value));

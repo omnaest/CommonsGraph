@@ -16,8 +16,8 @@
 package org.omnaest.utils.graph.domain.node;
 
 import java.util.Optional;
+import java.util.Set;
 
-import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.GraphBuilder.MultiNodeResolver;
 import org.omnaest.utils.stream.Streamable;
 
@@ -52,4 +52,10 @@ public interface Nodes extends Streamable<Node>
      * @return
      */
     public int size();
+
+    public Set<NodeIdentity> identities();
+
+    public Nodes getOutgoingNodes();
+
+    public Nodes getIncomingNodes();
 }

@@ -1,4 +1,4 @@
-package org.omnaest.utils.graph.internal.index.components;
+package org.omnaest.utils.graph.internal.data.components;
 
 import java.util.HashMap;
 import java.util.Map;

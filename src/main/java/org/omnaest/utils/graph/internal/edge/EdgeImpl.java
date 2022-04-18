@@ -2,12 +2,16 @@ package org.omnaest.utils.graph.internal.edge;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
+import org.omnaest.utils.MapperUtils;
+import org.omnaest.utils.PredicateUtils;
 import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.element.bi.UnaryBiElement;
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
+import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentityWithAttributes;
 import org.omnaest.utils.graph.domain.attributes.Attribute;
 import org.omnaest.utils.graph.domain.attributes.Tag;
 import org.omnaest.utils.graph.domain.edge.Edge;
@@ -40,15 +44,37 @@ public class EdgeImpl implements Edge
     }
 
     @Override
+    public Stream<Node> stream()
+    {
+        return Stream.of(this.from, this.to);
+    }
+
+    @Override
     public EdgeIdentity getIdentity()
     {
         return EdgeIdentity.of(this.from.getIdentity(), this.to.getIdentity());
     }
 
     @Override
+    public EdgeIdentityWithAttributes getIdentityWithAttributes()
+    {
+        return EdgeIdentityWithAttributes.of(this.from.getIdentity(), this.to.getIdentity(), this.attributes);
+    }
+
+    @Override
     public Set<Attribute> getAttributes()
     {
         return SetUtils.toNew(this.attributes);
+    }
+
+    @Override
+    public Set<Tag> getTags()
+    {
+        return this.attributes.stream()
+                              .map(Attribute::asTag)
+                              .filter(PredicateUtils.filterNonEmptyOptional())
+                              .map(MapperUtils.mapOptionalToValue())
+                              .collect(Collectors.toSet());
     }
 
     @Override

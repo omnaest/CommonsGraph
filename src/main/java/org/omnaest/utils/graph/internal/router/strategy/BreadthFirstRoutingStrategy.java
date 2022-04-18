@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,8 +37,8 @@ import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.AssertionUtils;
@@ -59,7 +60,9 @@ import org.omnaest.utils.element.bi.BiElement;
 import org.omnaest.utils.element.bi.UnaryBiElement;
 import org.omnaest.utils.element.cached.CachedElement;
 import org.omnaest.utils.functional.PredicateConsumer;
+import org.omnaest.utils.graph.GraphUtils;
 import org.omnaest.utils.graph.domain.Graph;
+import org.omnaest.utils.graph.domain.GraphBuilder;
 import org.omnaest.utils.graph.domain.GraphRouter.RoutingStrategy;
 import org.omnaest.utils.graph.domain.attributes.Tag;
 import org.omnaest.utils.graph.domain.edge.Edge;
@@ -73,10 +76,18 @@ import org.omnaest.utils.graph.domain.traversal.Route;
 import org.omnaest.utils.graph.domain.traversal.RouteAndTraversalControl;
 import org.omnaest.utils.graph.domain.traversal.Routes;
 import org.omnaest.utils.graph.domain.traversal.SimpleRoute;
+import org.omnaest.utils.graph.domain.traversal.TracingGraphAndStatisticsProvider;
 import org.omnaest.utils.graph.domain.traversal.Traversal;
+import org.omnaest.utils.graph.domain.traversal.Traversal.GraphLayer;
+import org.omnaest.utils.graph.domain.traversal.Traversal.GraphLayers;
+import org.omnaest.utils.graph.domain.traversal.Traversal.GraphLayersSelector;
+import org.omnaest.utils.graph.domain.traversal.Traversal.GraphSteppedView;
+import org.omnaest.utils.graph.domain.traversal.Traversal.GraphView;
+import org.omnaest.utils.graph.domain.traversal.Traversal.GraphViewConsumer;
 import org.omnaest.utils.graph.domain.traversal.Traversal.NodeWeightDeterminationFunction;
 import org.omnaest.utils.graph.domain.traversal.Traversal.TraversalStepContext;
 import org.omnaest.utils.graph.domain.traversal.Traversal.TraversalStepFilter;
+import org.omnaest.utils.graph.domain.traversal.Traversal.VisitedNodesStatistic;
 import org.omnaest.utils.graph.domain.traversal.TraversalRoutes;
 import org.omnaest.utils.graph.domain.traversal.TraversalRoutesConsumer;
 import org.omnaest.utils.graph.domain.traversal.TraversedEdge;
@@ -84,6 +95,9 @@ import org.omnaest.utils.graph.domain.traversal.hierarchy.DataBuilder;
 import org.omnaest.utils.graph.domain.traversal.hierarchy.HierarchicalNode;
 import org.omnaest.utils.graph.domain.traversal.hierarchy.Hierarchy;
 import org.omnaest.utils.graph.internal.router.route.RouteImpl;
+import org.omnaest.utils.map.counter.IntegerCountedMap;
+import org.omnaest.utils.map.counter.IntegerCountedMap.CountedKey;
+import org.omnaest.utils.map.counter.IntegerCounterMap;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
@@ -137,7 +151,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         return this;
     }
 
-    private static interface BudgetManager extends UnaryOperator<List<NodeAndContext>>
+    private static interface BudgetManager extends BiFunction<SuspendedNodesStack, List<NodeAndContext>, List<NodeAndContext>>
     {
 
         public double calculateBudgetScore(NodeAndContext parentNodeAndContext, TraversedEdges siblingEdges);
@@ -148,7 +162,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     {
 
         @Override
-        public List<NodeAndContext> apply(List<NodeAndContext> nodeAndPaths)
+        public List<NodeAndContext> apply(SuspendedNodesStack suspendedNodesStack, List<NodeAndContext> nodeAndPaths)
         {
             return nodeAndPaths;
         }
@@ -163,12 +177,11 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
     private static class OptimziedBudgetManager implements BudgetManager
     {
-        private List<NodeAndContext> stack = new ArrayList<>();
 
         @Override
-        public List<NodeAndContext> apply(List<NodeAndContext> nodeAndContext)
+        public List<NodeAndContext> apply(SuspendedNodesStack suspendedNodesStack, List<NodeAndContext> nodeAndContext)
         {
-            List<NodeAndContext> sortedNodeAndContext = Stream.concat(this.stack.stream(), nodeAndContext.stream())
+            List<NodeAndContext> sortedNodeAndContext = Stream.concat(suspendedNodesStack.drainAll(), nodeAndContext.stream())
                                                               .sorted(ComparatorUtils.builder()
                                                                                      .of(NodeAndContext.class)
                                                                                      .with(NodeAndContext::getBudgetScore)
@@ -183,8 +196,8 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             SplittedStream<NodeAndContext> splittedStream = StreamUtils.splitByFilter(sortedNodeAndContext.stream(),
                                                                                       iNodeAndContext -> iNodeAndContext.getBudgetScore() >= average);
 
-            this.stack = splittedStream.excluded()
-                                       .collect(Collectors.toList());
+            suspendedNodesStack.accept(splittedStream.excluded()
+                                                     .collect(Collectors.toList()));
             List<NodeAndContext> result = splittedStream.included()
                                                         .collect(Collectors.toList());
             return result;
@@ -195,6 +208,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         {
             return parentNodeAndContext.getBudgetScore() / Math.max(1.0, siblingEdges.size());
         }
+
     }
 
     @Override
@@ -226,16 +240,15 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                                 .getIdentity()),
                                          Collections.emptyList(), this.graph));
             }
+            TraversalBag traversalBag = new TraversalBag(new TrackStepContext(forwardFunctions, null), 0);
             VisitedNodesHandler visitedNodesHandler = new VisitedNodesFilterStrategy().newVisitedNodesContext()
-                                                                                      .newVisitedNodesHandler(new TraversalBag(new ForwardFunctionsContext(forwardFunctions,
-                                                                                                                                                           null),
-                                                                                                                               0).getExpandedNodesFilter());
+                                                                                      .newVisitedNodesHandler(traversalBag, null);
             while (!currentNodeAndPaths.isEmpty())
             {
                 Set<NodeIdentity> currentNodes = this.determineNodesFrom(currentNodeAndPaths);
                 this.resolveUnresolvedNodesIfEnabled(currentNodes);
                 currentNodeAndPaths = this.determineNextNodes(forwardFunctions, currentNodeAndPaths, visitedNodesHandler, SkipNodes.empty(),
-                                                              ConsumerUtils.noOperation());
+                                                              ConsumerUtils.noOperation(), Collections.emptyList(), new SuspendedNodesStack());
                 routes.addAll(this.determineRoutesByMatchingNodes(this.graph.findNodeById(to), currentNodeAndPaths));
             }
         }
@@ -250,7 +263,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     }
 
     @Override
-    public Traversal traverseOutgoing(Set<NodeIdentity> startNodes)
+    public Traversal traverseOutgoing(Collection<NodeIdentity> startNodes)
     {
         return this.traverse(startNodes, ForwardFunctions.OUTGOING);
 
@@ -275,7 +288,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     }
 
     @Override
-    public Traversal traverseIncoming(Set<NodeIdentity> startNodes)
+    public Traversal traverseIncoming(Collection<NodeIdentity> startNodes)
     {
         return this.traverse(startNodes, ForwardFunctions.INCOMING);
     }
@@ -300,11 +313,33 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
     }
 
-    private Traversal traverse(Set<NodeIdentity> startNodes, ForwardFunctionsProvider forwardFunction)
+    @Override
+    public Traversal traverseEach(Direction direction, NodeIdentity... startNodes)
+    {
+        return this.traverseEach(direction, Optional.ofNullable(startNodes)
+                                                    .map(Arrays::asList)
+                                                    .orElse(Collections.emptyList()));
+    }
+
+    @Override
+    public Traversal traverseEach(Direction direction, Collection<NodeIdentity> startNodes)
+    {
+        Traversal traversal = this.traverse(direction);
+        Optional.ofNullable(startNodes)
+                .map(ListUtils::toList)
+                .orElse(Collections.emptyList())
+                .forEach(startNode -> traversal.andTraverse(direction, startNode)
+                                               .withOwnContext());
+        return traversal;
+    }
+
+    private Traversal traverse(Collection<NodeIdentity> startNodes, ForwardFunctionsProvider forwardFunction)
     {
         Graph graph = this.graph;
-        return new TraversalImpl(forwardFunction, graph, startNodes);
-
+        return new TraversalImpl(forwardFunction, graph, Optional.ofNullable(startNodes)
+                                                                 .map(LinkedHashSet::new)
+                                                                 .map(MapperUtils.<Set<NodeIdentity>, Set<NodeIdentity>>identity())
+                                                                 .orElse(Collections.emptySet()));
     }
 
     private static interface ForwardFunctionsProvider
@@ -531,12 +566,15 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
     }
 
-    private static class ForwardFunctionsContext
+    private static class TrackStepContext
     {
         private final ForwardFunctionsProvider forwardFunctionsProvider;
         private final TraversalStepFilter      traversalStepFilter;
+        private final List<EdgeFilter>         edgeFilters = new ArrayList<>();
 
-        public ForwardFunctionsContext(ForwardFunctionsProvider forwardFunctionsProvider, TraversalStepFilter traversalStepFilter)
+        private boolean ownVisitedNodesContext = false;
+
+        public TrackStepContext(ForwardFunctionsProvider forwardFunctionsProvider, TraversalStepFilter traversalStepFilter)
         {
             super();
             this.forwardFunctionsProvider = forwardFunctionsProvider;
@@ -553,6 +591,130 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             return Optional.ofNullable(this.traversalStepFilter);
         }
 
+        public TrackStepContext addEdgeFilter(EdgeFilter edgeFilter)
+        {
+            if (edgeFilter != null)
+            {
+                this.edgeFilters.add(edgeFilter);
+            }
+            return this;
+        }
+
+        public List<EdgeFilter> getEdgeFilters()
+        {
+            return this.edgeFilters;
+        }
+
+        public TrackStepContext setOwnVistedNodesContext(boolean ownVisitedNodesContext)
+        {
+            this.ownVisitedNodesContext = ownVisitedNodesContext;
+            return this;
+        }
+
+        public boolean hasOwnVisitedNodesContext()
+        {
+            return this.ownVisitedNodesContext;
+        }
+
+    }
+
+    private static class TracingGraph implements EdgeAndNodeTraversalListener
+    {
+        private GraphBuilder graphBuilder = GraphUtils.builder();
+
+        @Override
+        public void accept(TraversedEdge edge)
+        {
+            this.graphBuilder.addEdge(edge.getEdge()
+                                          .getIdentity());
+
+        }
+
+        @Override
+        public void accept(Node node)
+        {
+            this.graphBuilder.addNode(node.getIdentity());
+        }
+
+        public Graph build()
+        {
+            return this.graphBuilder.build()
+                                    .clone();
+        }
+
+    }
+
+    private static class TracingGraphManager implements EdgeAndNodeTraversalListener
+    {
+        private TracingGraph                tracingGraph    = new TracingGraph();
+        private TracingGraphConsumerManager consumerManager = new TracingGraphConsumerManager();
+
+        @Override
+        public void accept(TraversedEdge edge)
+        {
+            this.tracingGraph.accept(edge);
+        }
+
+        @Override
+        public void accept(Node node)
+        {
+            this.tracingGraph.accept(node);
+        }
+
+        public Graph buildGraph()
+        {
+            return this.tracingGraph.build();
+        }
+
+        public Graph buildGraphAndTriggerListeners(VisitedNodesStatistic visitedNodesStatistic)
+        {
+            Graph graph = this.buildGraph();
+
+            this.consumerManager.accept(new GraphViewImpl(Optional.of(new TracingGraphAndStatisticsProvider()
+            {
+                @Override
+                public VisitedNodesStatistic getVisitedNodesStatistic()
+                {
+                    return visitedNodesStatistic;
+                }
+
+                @Override
+                public Optional<Graph> getTracingGraph()
+                {
+                    return Optional.of(graph);
+                }
+            }), visitedNodesStatistic.getNumberOfSteps()));
+
+            return graph;
+        }
+
+        public TracingGraphManager addListener(GraphViewConsumer graphConsumer)
+        {
+            this.consumerManager.addListener(graphConsumer);
+            return this;
+        }
+    }
+
+    private static class TracingGraphConsumerManager implements GraphViewConsumer
+    {
+        private List<GraphViewConsumer> consumers = new ArrayList<>();
+
+        @Override
+        public void accept(GraphView graphView)
+        {
+            this.consumers.forEach(consumer ->
+            {
+                consumer.accept(graphView);
+            });
+        }
+
+        public void addListener(GraphViewConsumer graphConsumer)
+        {
+            if (graphConsumer != null)
+            {
+                this.consumers.add(graphConsumer);
+            }
+        }
     }
 
     public static interface ColumnizedHierarchyNode extends Supplier<HierarchicalNode>
@@ -567,31 +729,395 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         public String asJsonWithData(BiConsumer<HierarchicalNode, DataBuilder> nodeAndDataBuilderConsumer);
     }
 
+    private static class StartNodeAndForwardFunctionContext
+    {
+        private final Set<NodeIdentity>      startNodes        = new HashSet<>();
+        private final List<TrackStepContext> trackStepContexts = new ArrayList<>();
+
+        public StartNodeAndForwardFunctionContext addStartNodesWithContext(Set<NodeIdentity> startNodes, TrackStepContext trackStepContext)
+        {
+            this.startNodes.addAll(Optional.ofNullable(startNodes)
+                                           .orElse(Collections.emptySet()));
+            boolean hasOwnVisitedNodesContext = this.getCurrentTrackStepContext()
+                                                    .map(TrackStepContext::hasOwnVisitedNodesContext)
+                                                    .orElse(false);
+            this.trackStepContexts.add(trackStepContext.setOwnVistedNodesContext(hasOwnVisitedNodesContext));
+            return this;
+        }
+
+        public StartNodeAndForwardFunctionContext addEdgeFilter(EdgeFilter edgeFilter)
+        {
+            this.getCurrentTrackStepContext()
+                .ifPresent(context -> context.addEdgeFilter(edgeFilter));
+            return this;
+        }
+
+        private Optional<TrackStepContext> getCurrentTrackStepContext()
+        {
+            return ListUtils.optionalLast(this.trackStepContexts);
+        }
+
+        public Set<NodeIdentity> getStartNodes()
+        {
+            return this.startNodes;
+        }
+
+        public List<TrackStepContext> getForwardFunctionContexts()
+        {
+            return this.trackStepContexts;
+        }
+
+        public StartNodeAndForwardFunctionContext setOwnVistedNodesContext(boolean ownVisitedNodesContext)
+        {
+            this.getCurrentTrackStepContext()
+                .orElseThrow(() -> new IllegalStateException("Please define a traversal before calling this method. Consider the javadoc of withOwnContext()"))
+                .setOwnVistedNodesContext(ownVisitedNodesContext);
+            return this;
+        }
+
+    }
+
+    private static class StartNodeAndForwardFunctionContextTracks
+    {
+        private List<StartNodeAndForwardFunctionContext> contexts = new ArrayList<>();
+
+        public StartNodeAndForwardFunctionContext getOrCreateCurrentContextTrack()
+        {
+            if (this.contexts.isEmpty())
+            {
+                this.createNewContextTrack();
+            }
+            return ListUtils.last(this.contexts);
+        }
+
+        public StartNodeAndForwardFunctionContextTracks addStartNodesWithContextToCurrentTrack(Set<NodeIdentity> startNodes,
+                                                                                               TrackStepContext forwardFunctionsContext)
+        {
+            this.getOrCreateCurrentContextTrack()
+                .addStartNodesWithContext(startNodes, forwardFunctionsContext);
+            return this;
+        }
+
+        public StartNodeAndForwardFunctionContextTracks addForwardFunctionContextToCurrentTrack(TrackStepContext forwardFunctionsContext)
+        {
+            this.getOrCreateCurrentContextTrack()
+                .addStartNodesWithContext(Collections.emptySet(), forwardFunctionsContext);
+            return this;
+        }
+
+        public StartNodeAndForwardFunctionContextTracks createNewContextTrack()
+        {
+            this.contexts.add(new StartNodeAndForwardFunctionContext());
+            return this;
+        }
+
+        public StartNodeAndForwardFunctionContextTracks forEachTrack(Consumer<StartNodeAndForwardFunctionContext> trackConsumer)
+        {
+            this.contexts.forEach(trackConsumer);
+            return this;
+        }
+
+        public StartNodeAndForwardFunctionContextTracks addEdgeFilter(EdgeFilter edgeFilter)
+        {
+            this.getOrCreateCurrentContextTrack()
+                .addEdgeFilter(edgeFilter);
+            return this;
+        }
+    }
+
+    public static interface TraversalStatistics
+    {
+
+    }
+
+    private static class TraversalStatisticsCollector implements TraversalStatistics, EdgeAndNodeTraversalListener
+    {
+        private IntegerCounterMap<NodeIdentity> nodeToVisitedCount = IntegerCounterMap.newInstance();
+
+        public IntegerCountedMap<NodeIdentity> getNodeToVisitedCount()
+        {
+            return this.nodeToVisitedCount.clone()
+                                          .asImmutable();
+        }
+
+        @Override
+        public void accept(TraversedEdge edge)
+        {
+            if (edge != null)
+            {
+                this.accept(edge.getNextNode());
+            }
+        }
+
+        @Override
+        public void accept(Node node)
+        {
+            if (node != null)
+            {
+                this.nodeToVisitedCount.incrementByOne(node.getIdentity());
+            }
+        }
+
+    }
+
+    private static class VisitedNodesStatisticImpl implements VisitedNodesStatistic
+    {
+        private final IntegerCountedMap<NodeIdentity> nodeToVisitedCount;
+        private final long                            numberOfSteps;
+
+        private VisitedNodesStatisticImpl(IntegerCountedMap<NodeIdentity> nodeToVisitedCount, long numberOfSteps)
+        {
+            this.nodeToVisitedCount = nodeToVisitedCount;
+            this.numberOfSteps = numberOfSteps;
+        }
+
+        @Override
+        public int getCountFor(NodeIdentity nodeIdentity)
+        {
+            return this.nodeToVisitedCount.getAsInt(nodeIdentity);
+        }
+
+        @Override
+        public Set<NodeIdentity> nodes()
+        {
+            return this.nodeToVisitedCount.keySet();
+        }
+
+        @Override
+        public Set<NodeIdentity> nodesByCount(int count)
+        {
+            return this.nodeToVisitedCount.entries()
+                                          .filter(entry -> entry.getCount() == count)
+                                          .map(CountedKey<NodeIdentity>::getKey)
+                                          .collect(Collectors.toSet());
+        }
+
+        @Override
+        public int getNumberOfSteps()
+        {
+            return (int) this.numberOfSteps;
+        }
+
+        @Override
+        public int getMaxCount()
+        {
+            return this.nodeToVisitedCount.getMaxCount();
+        }
+    }
+
+    private static class GraphViewImpl implements GraphView
+    {
+        private final Optional<TracingGraphAndStatisticsProvider> lastProvider;
+        private final long                                        numberOfSteps;
+
+        private GraphViewImpl(Optional<TracingGraphAndStatisticsProvider> lastProvider, int numberOfSteps)
+        {
+            this.lastProvider = lastProvider;
+            this.numberOfSteps = numberOfSteps;
+        }
+
+        @Override
+        public Graph get()
+        {
+            return this.lastProvider.flatMap(TracingGraphAndStatisticsProvider::getTracingGraph)
+                                    .orElse(GraphUtils.empty());
+        }
+
+        @Override
+        public GraphLayersSelector layers()
+        {
+            return new GraphLayersSelector()
+            {
+                @Override
+                public GraphLayers byVisitedCount()
+                {
+                    return this.byVisitedCount(VisitedNodesStatistic::nodesByCount);
+                }
+
+                @Override
+                public GraphLayers byAtLeastVisitedCount()
+                {
+                    return this.byVisitedCount((visitedNodesStatistic, count) -> IntStream.rangeClosed(count, visitedNodesStatistic.getMaxCount())
+                                                                                          .mapToObj(visitedNodesStatistic::nodesByCount)
+                                                                                          .flatMap(Set<NodeIdentity>::stream)
+                                                                                          .collect(Collectors.toSet()));
+                }
+
+                public GraphLayers byVisitedCount(BiFunction<VisitedNodesStatistic, Integer, Set<NodeIdentity>> nodesResolver)
+                {
+                    VisitedNodesStatistic visitedNodesStatistic = GraphViewImpl.this.lastProvider.map(TracingGraphAndStatisticsProvider::getVisitedNodesStatistic)
+                                                                                                 .orElse(new VisitedNodesStatisticImpl(IntegerCountedMap.empty(),
+                                                                                                                                       GraphViewImpl.this.numberOfSteps));
+                    Graph finalTracingGraph = GraphViewImpl.this.get();
+                    return new GraphLayers()
+                    {
+                        @Override
+                        public Stream<GraphLayer> stream()
+                        {
+                            return IntStream.rangeClosed(0, visitedNodesStatistic.getMaxCount())
+                                            .mapToObj(count -> new GraphLayer()
+                                            {
+                                                @Override
+                                                public Graph get()
+                                                {
+
+                                                    Set<NodeIdentity> nodes = nodesResolver.apply(visitedNodesStatistic, count);
+                                                    return finalTracingGraph.subGraph()
+                                                                            .withIncludedNodes(nodes)
+                                                                            .build();
+                                                }
+
+                                                @Override
+                                                public int getIndex()
+                                                {
+                                                    return count;
+                                                }
+                                            });
+                        }
+                    };
+                }
+
+            };
+        }
+    }
+
+    private static class GraphSteppedViewImpl extends GraphViewImpl implements GraphSteppedView
+    {
+        private final List<TracingGraphAndStatisticsProvider> providers;
+
+        private GraphSteppedViewImpl(Optional<TracingGraphAndStatisticsProvider> lastProvider, List<TracingGraphAndStatisticsProvider> providers)
+        {
+            super(lastProvider, providers.size());
+            this.providers = providers;
+        }
+
+        @Override
+        public Stream<Graph> stream()
+        {
+            return this.steps();
+        }
+
+        @Override
+        public Stream<Graph> steps()
+        {
+            return this.providers.stream()
+                                 .map(TracingGraphAndStatisticsProvider::getTracingGraph)
+                                 .map(MapperUtils.mapOptionalToValue());
+        }
+
+    }
+
     private class TraversalImpl implements Traversal
     {
-        private final List<ForwardFunctionsContext> forwardFunctionContexts = new ArrayList<>();
-        private final Graph                         graph;
-        private final Set<NodeIdentity>             startNodes;
+        private final Graph                                    graph;
+        private final StartNodeAndForwardFunctionContextTracks startNodeAndForwardFunctionContextTrack = new StartNodeAndForwardFunctionContextTracks();
+        private final List<TraversalRoutesConsumer>            alreadyVisitedNodesHitHandlers          = new ArrayList<>();
+        private final VisitedNodesFilterStrategy               visitedNodesFilterStrategy              = new VisitedNodesFilterStrategy();
+        private final List<WeightedTerminationHandler>         weightedTerminationHandlers             = new ArrayList<>();
+        private final TraversalStatisticsCollector             traversalStatisticsCollector            = new TraversalStatisticsCollector();
+        private final EdgeAndNodeTraversalListenerManager      edgeTraversalListenerManager            = new EdgeAndNodeTraversalListenerManager().add(this.traversalStatisticsCollector);;
 
-        private final List<TraversalRoutesConsumer>    alreadyVisitedNodesHitHandlers = new ArrayList<>();
-        private final VisitedNodesFilterStrategy       visitedNodesFilterStrategy     = new VisitedNodesFilterStrategy();
-        private final List<WeightedTerminationHandler> weightedTerminationHandlers    = new ArrayList<>();
+        private Optional<TracingGraphManager> tracingGraphManager = Optional.empty();
+        private int                           stepsLimit          = Integer.MAX_VALUE;
+        private int                           stepsToSkip         = 0;
 
         private TraversalImpl(ForwardFunctionsProvider forwardFunction, Graph graph, Set<NodeIdentity> startNodes)
         {
             this.graph = graph;
-            this.startNodes = startNodes;
-            this.forwardFunctionContexts.add(new ForwardFunctionsContext(forwardFunction, null));
+            this.startNodeAndForwardFunctionContextTrack.addStartNodesWithContextToCurrentTrack(startNodes, new TrackStepContext(forwardFunction, null));
+        }
+
+        @Override
+        public Traversal withEdgeFilter(EdgeFilter edgeFilter)
+        {
+            if (edgeFilter != null)
+            {
+                this.startNodeAndForwardFunctionContextTrack.addEdgeFilter(edgeFilter);
+            }
+            return this;
+        }
+
+        @Override
+        public Traversal withExcludingEdgeByTagFilter(Tag... tag)
+        {
+            return this.withEdgeFilter(edge -> !edge.hasAnyTag(tag));
+        }
+
+        @Override
+        public Traversal withTracingGraph()
+        {
+            if (!this.tracingGraphManager.isPresent())
+            {
+                TracingGraphManager manager = new TracingGraphManager();
+                this.edgeTraversalListenerManager.add(manager);
+                this.tracingGraphManager = Optional.of(manager);
+            }
+            return this;
+        }
+
+        @Override
+        public Traversal withTracingGraphStepListener(GraphViewConsumer graphConsumer)
+        {
+            if (graphConsumer != null)
+            {
+                this.withTracingGraph();
+                this.tracingGraphManager.get()
+                                        .addListener(graphConsumer);
+            }
+            return this;
+        }
+
+        private Optional<Graph> determineCurrentTracingGraphForLastTraversalStepAndTriggerListeners(int traversalStep)
+        {
+            return this.tracingGraphManager.map(manager -> manager.buildGraphAndTriggerListeners(new VisitedNodesStatisticImpl(this.traversalStatisticsCollector.getNodeToVisitedCount(),
+                                                                                                                               traversalStep + 1)));
         }
 
         @Override
         public Stream<TraversalRoutes> stream()
         {
-            return StreamUtils.fromIterator(new BreadthFirstIterator(this.startNodes, this.forwardFunctionContexts, this.graph,
-                                                                     this.alreadyVisitedNodesHitHandlers, this.visitedNodesFilterStrategy))
-                              .map(TraversalRoutesImpl::new)
+            return StreamUtils.fromIterator(new BreadthFirstIterator(this.startNodeAndForwardFunctionContextTrack, this.graph,
+                                                                     this.alreadyVisitedNodesHitHandlers, this.visitedNodesFilterStrategy,
+                                                                     this.edgeTraversalListenerManager))
+                              .map(routesControl -> new TraversalRoutesImpl(routesControl,
+                                                                            this.determineCurrentTracingGraphForLastTraversalStepAndTriggerListeners(routesControl.getTraversalStepContext()
+                                                                                                                                                                  .getStep()),
+                                                                            new VisitedNodesStatisticImpl(this.traversalStatisticsCollector.getNodeToVisitedCount(),
+                                                                                                          routesControl.getTraversalStepContext()
+                                                                                                                       .getStep()
+                                                                                                                  + 1)))
                               .map(MapperUtils.identityCast(TraversalRoutes.class))
-                              .peek(PeekUtils.all(this.weightedTerminationHandlers));
+                              .peek(PeekUtils.all(this.weightedTerminationHandlers))
+                              .skip(this.stepsToSkip)
+                              .limit(this.stepsLimit);
+        }
+
+        @Override
+        public TraversalTerminal and()
+        {
+            List<TracingGraphAndStatisticsProvider> providers = this.withTracingGraph()
+                                                                    .includingFirstRouteOfAlreadyVisitedNodes()
+                                                                    .stream()
+                                                                    .map(routes -> (TracingGraphAndStatisticsProvider) routes)
+                                                                    .collect(Collectors.toList());
+            return new TraversalTerminal()
+            {
+                @Override
+                public GraphSteppedView viewAsGraph()
+                {
+                    Optional<TracingGraphAndStatisticsProvider> lastProvider = ListUtils.optionalLast(providers);
+                    return new GraphSteppedViewImpl(lastProvider, providers);
+                }
+
+                @Override
+                public VisitedNodesStatistic getVisitedNodesStatistic()
+                {
+                    long numberOfSteps = providers.size();
+                    IntegerCountedMap<NodeIdentity> nodeToVisitedCount = TraversalImpl.this.traversalStatisticsCollector.getNodeToVisitedCount();
+                    return new VisitedNodesStatisticImpl(nodeToVisitedCount, numberOfSteps);
+                }
+
+            };
         }
 
         @Override
@@ -861,32 +1387,111 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
 
         @Override
-        public Traversal andTraverseIncoming()
+        public Traversal andAfterwardsTraverseIncoming()
         {
-            return this.andTraverse(Direction.INCOMING);
+            return this.andAfterwardsTraverse(Direction.INCOMING);
         }
 
         @Override
-        public Traversal andTraverseOutgoing()
+        public Traversal andAfterwardsTraverseOutgoing()
         {
-            return this.andTraverse(Direction.OUTGOING);
+            return this.andAfterwardsTraverse(Direction.OUTGOING);
         }
 
         @Override
-        public Traversal andTraverse(TraversalStepFilter filter, Direction... directions)
+        public Traversal andAfterwardsTraverse(TraversalStepFilter filter, Direction... directions)
         {
             Optional.ofNullable(directions)
                     .map(Arrays::asList)
                     .orElse(Collections.emptyList())
-                    .forEach(direction -> this.forwardFunctionContexts.add(new ForwardFunctionsContext(ForwardFunctions.byDirection(direction), filter)));
+                    .forEach(direction -> this.startNodeAndForwardFunctionContextTrack.addForwardFunctionContextToCurrentTrack(new TrackStepContext(ForwardFunctions.byDirection(direction),
+                                                                                                                                                    filter)));
             return this;
         }
 
         @Override
-        public Traversal andTraverse(Direction... directions)
+        public Traversal andTraverseIncoming(NodeIdentity... startNodes)
         {
-            return this.andTraverse(null, directions);
+            return this.andTraverse(Direction.INCOMING, startNodes);
         }
+
+        @Override
+        public Traversal andTraverseOutgoing(NodeIdentity... startNodes)
+        {
+            return this.andTraverse(Direction.OUTGOING, startNodes);
+        }
+
+        @Override
+        public Traversal andTraverse(Direction direction, NodeIdentity... startNodes)
+        {
+            return this.andTraverse(direction, Arrays.asList(startNodes));
+        }
+
+        @Override
+        public Traversal andTraverse(Direction direction, Collection<NodeIdentity> startNodes)
+        {
+            TraversalStepFilter filter = null;
+            return this.andTraverse(direction, filter, startNodes);
+        }
+
+        @Override
+        public Traversal andTraverseEach(Direction direction, Collection<NodeIdentity> startNodes)
+        {
+            Traversal traversal = this.andTraverse(direction);
+            Optional.ofNullable(startNodes)
+                    .map(ListUtils::toList)
+                    .orElse(Collections.emptyList())
+                    .forEach(startNode -> traversal.andTraverse(direction, startNode)
+                                                   .withOwnContext());
+            return traversal;
+        }
+
+        @Override
+        public Traversal andTraverse(Direction direction, TraversalStepFilter filter, NodeIdentity... startNodes)
+        {
+            return this.andTraverse(direction, filter, Arrays.asList(startNodes));
+        }
+
+        public Traversal andTraverse(Direction direction, TraversalStepFilter filter, Collection<NodeIdentity> startNodes)
+        {
+            Optional.ofNullable(direction)
+                    .map(Arrays::asList)
+                    .orElse(Collections.emptyList())
+                    .forEach(iDirection -> this.startNodeAndForwardFunctionContextTrack.createNewContextTrack()
+                                                                                       .addStartNodesWithContextToCurrentTrack(SetUtils.toSet(startNodes),
+                                                                                                                               new TrackStepContext(ForwardFunctions.byDirection(iDirection),
+                                                                                                                                                    filter)));
+            return this;
+        }
+
+        @Override
+        public Traversal withOwnContext()
+        {
+            this.startNodeAndForwardFunctionContextTrack.getOrCreateCurrentContextTrack()
+                                                        .setOwnVistedNodesContext(true);
+            return this;
+        }
+
+        @Override
+        public Traversal andAfterwardsTraverse(Direction... directions)
+        {
+            return this.andAfterwardsTraverse(null, directions);
+        }
+
+        @Override
+        public Traversal limitStepsTo(int steps)
+        {
+            this.stepsLimit = steps;
+            return this;
+        }
+
+        @Override
+        public Traversal skipSteps(int steps)
+        {
+            this.stepsToSkip = steps;
+            return this;
+        }
+
     }
 
     @SuppressWarnings("unused")
@@ -1031,7 +1636,8 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
     private List<NodeAndContext> determineNextNodes(ForwardFunctionsProvider forwardFunctions, List<NodeAndContext> currentNodeAndPaths,
                                                     VisitedNodesHandler visitedNodesHandler, SkipNodes skipNodes,
-                                                    Consumer<Set<NodeAndContext>> visitedNodesHitConsumer)
+                                                    Consumer<Set<NodeAndContext>> visitedNodesHitConsumer, List<EdgeFilter> edgeFilters,
+                                                    SuspendedNodesStack suspendedNodesStack)
     {
         Set<NodeAndContext> visitedNodesHitPaths = new HashSet<>();
         List<NodeAndContext> result = currentNodeAndPaths.stream()
@@ -1039,7 +1645,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                          .flatMap(this.explodeCurrentNodeIntoNextNodes(forwardFunctions, visitedNodesHandler,
                                                                                                        visitedNodesHitPaths))
                                                          .filter(skipNodes::matchesNot)
-                                                         .filter(this.createEdgesFilter(forwardFunctions.forwardEdgeFinderFunction()))
+                                                         .filter(this.createEffectiveEdgesFilter(forwardFunctions.forwardEdgeFinderFunction(), edgeFilters))
                                                          .collect(Collectors.toList());
 
         if (!visitedNodesHitPaths.isEmpty())
@@ -1047,7 +1653,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             visitedNodesHitConsumer.accept(visitedNodesHitPaths);
         }
 
-        return this.budgetManager.apply(result);
+        return visitedNodesHandler.peekAndPopulateToEdgeTraversalListener(this.budgetManager.apply(suspendedNodesStack, result));
     }
 
     private Function<NodeAndContext, Stream<NodeAndContext>> explodeCurrentNodeIntoNextNodes(ForwardFunctionsProvider forwardFunctions,
@@ -1067,10 +1673,10 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         };
     }
 
-    private Predicate<NodeAndContext> createEdgesFilter(BiFunction<Node, Node, Optional<Edge>> edgesFunction)
+    private Predicate<NodeAndContext> createEffectiveEdgesFilter(BiFunction<Node, Node, Optional<Edge>> edgesFunction, List<EdgeFilter> edgeFilters)
     {
-        List<EdgeFilter> edgeFilters = this.edgeFilters;
-        if (edgeFilters.isEmpty())
+        List<EdgeFilter> mergedEdgeFilters = ListUtils.mergedList(this.edgeFilters, edgeFilters);
+        if (mergedEdgeFilters.isEmpty())
         {
             return nodeAndPath -> true;
         }
@@ -1083,7 +1689,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
                 return OptionalUtils.both(previousNode, currentNode)
                                     .flatMap(fromAndTo -> edgesFunction.apply(fromAndTo.getFirst(), fromAndTo.getSecond()))
-                                    .map(edge -> PredicateUtils.all(edgeFilters)
+                                    .map(edge -> PredicateUtils.all(mergedEdgeFilters)
                                                                .test(edge))
                                     .orElse(true);
             };
@@ -1131,11 +1737,27 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
     private static class TraversalRoutesImpl implements TraversalRoutes
     {
-        private final RoutesControl routesControl;
+        private final RoutesControl         routesControl;
+        private final VisitedNodesStatistic visitedNodesStatistic;
+        private final Optional<Graph>       tracingGraph;
 
-        private TraversalRoutesImpl(RoutesControl routesControl)
+        private TraversalRoutesImpl(RoutesControl routesControl, Optional<Graph> tracingGraph, VisitedNodesStatistic visitedNodesStatistic)
         {
             this.routesControl = routesControl;
+            this.tracingGraph = tracingGraph;
+            this.visitedNodesStatistic = visitedNodesStatistic;
+        }
+
+        @Override
+        public Optional<Graph> getTracingGraph()
+        {
+            return this.tracingGraph;
+        }
+
+        @Override
+        public VisitedNodesStatistic getVisitedNodesStatistic()
+        {
+            return this.visitedNodesStatistic;
         }
 
         @Override
@@ -1231,6 +1853,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                 return this.traversalStepContext;
             }
         }
+
     }
 
     private class BreadthFirstIterator implements Iterator<RoutesControl>
@@ -1239,27 +1862,32 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         private final AtomicLong                   counter = new AtomicLong();
         private final TraversalBagManager          traversalBagManager;
 
-        private BreadthFirstIterator(Set<NodeIdentity> startNodes, List<ForwardFunctionsContext> forwardFunctionContexts, Graph graph,
-                                     List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers, VisitedNodesFilterStrategy visitedNodesFilterStrategy)
+        private BreadthFirstIterator(StartNodeAndForwardFunctionContextTracks startNodeAndForwardFunctionContextTracks, Graph graph,
+                                     List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers, VisitedNodesFilterStrategy visitedNodesFilterStrategy,
+                                     EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager)
         {
-            List<NodeAndContext> startNodeAndContexts = Optional.ofNullable(startNodes)
-                                                                .orElse(Collections.emptySet())
-                                                                .stream()
-                                                                .map(graph::findNodeById)
-                                                                .filter(Optional::isPresent)
-                                                                .map(Optional::get)
-                                                                .map(NodeAndContext::of)
-                                                                .collect(Collectors.toList());
 
-            this.traversalBagManager = new TraversalBagManager().apply(forwardFunctionContexts)
-                                                                .initializePrimaryBagWithNodes(startNodeAndContexts);
+            this.traversalBagManager = new TraversalBagManager().apply(graph, startNodeAndForwardFunctionContextTracks);
+
+            List<NodeAndContext> primaryStartNodesAndContexts = this.traversalBagManager.getStartNodesAndContexts();
+            this.populateStartNodesToEdgeTraversalListener(edgeTraversalListenerManager, primaryStartNodesAndContexts);
 
             SkipNodes skipNodes = new SkipNodes();
             this.currentRoutesControl = CachedElement.of(new BreadthFirstSupplier(this.traversalBagManager, this.counter, skipNodes,
-                                                                                  alreadyVisitedNodesHitHandlers, visitedNodesFilterStrategy))
-                                                     .set(new RoutesControl(new RoutesImpl(BreadthFirstRoutingStrategy.this.wrapMatchingNodeAndPathsIntoRoutes(startNodeAndContexts)),
+                                                                                  alreadyVisitedNodesHitHandlers, visitedNodesFilterStrategy,
+                                                                                  edgeTraversalListenerManager))
+                                                     .set(new RoutesControl(new RoutesImpl(BreadthFirstRoutingStrategy.this.wrapMatchingNodeAndPathsIntoRoutes(primaryStartNodesAndContexts)),
                                                                             skipNodes, this.counter.incrementAndGet(), () -> this.counter.get(),
                                                                             this.traversalBagManager.getPrimaryTraversalStepContext()));
+        }
+
+        private void populateStartNodesToEdgeTraversalListener(EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager,
+                                                               List<NodeAndContext> startNodeAndContexts)
+        {
+            Optional.ofNullable(edgeTraversalListenerManager)
+                    .ifPresent(manager -> startNodeAndContexts.stream()
+                                                              .map(NodeAndContext::getNode)
+                                                              .forEach(manager::accept));
         }
 
         @Override
@@ -1279,19 +1907,22 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
         private final class BreadthFirstSupplier implements Supplier<RoutesControl>
         {
-            private final VistedNodesContext            visitedNodesContext;
-            private final SkipNodes                     skipNodes;
-            private final AtomicLong                    counter;
-            private final List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers;
-            private final TraversalBagManager           traversalBagManager;
+            private final VistedNodesContext                  visitedNodesContext;
+            private final SkipNodes                           skipNodes;
+            private final AtomicLong                          counter;
+            private final List<TraversalRoutesConsumer>       alreadyVisitedNodesHitHandlers;
+            private final TraversalBagManager                 traversalBagManager;
+            private final EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager;
 
             private BreadthFirstSupplier(TraversalBagManager traversalBagManager, AtomicLong counter, SkipNodes skipNodes,
-                                         List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers, VisitedNodesFilterStrategy visitedNodesFilterStrategy)
+                                         List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers, VisitedNodesFilterStrategy visitedNodesFilterStrategy,
+                                         EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager)
             {
                 this.traversalBagManager = traversalBagManager;
                 this.counter = counter;
                 this.skipNodes = skipNodes;
                 this.alreadyVisitedNodesHitHandlers = alreadyVisitedNodesHitHandlers;
+                this.edgeTraversalListenerManager = edgeTraversalListenerManager;
                 this.visitedNodesContext = visitedNodesFilterStrategy.newVisitedNodesContext();
             }
 
@@ -1307,9 +1938,12 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                     //
                     traversalBag.setCurrentNodeAndContexts(BreadthFirstRoutingStrategy.this.determineNextNodes(traversalBag.getForwardFunctions(),
                                                                                                                traversalBag.getCurrentNodeAndContexts(),
-                                                                                                               this.visitedNodesContext.newVisitedNodesHandler(traversalBag.getExpandedNodesFilter()),
+                                                                                                               this.visitedNodesContext.newVisitedNodesHandler(traversalBag,
+                                                                                                                                                               this.edgeTraversalListenerManager),
                                                                                                                this.skipNodes,
-                                                                                                               this.createVisitedNodesHitConsumer()));
+                                                                                                               this.createVisitedNodesHitConsumer(),
+                                                                                                               traversalBag.getEdgeFilters(),
+                                                                                                               traversalBag.getSuspendedNodesStack()));
 
                     //
                     List<Route> routes = BreadthFirstRoutingStrategy.this.wrapMatchingNodeAndPathsIntoRoutes(traversalBag.getCurrentNodeAndContexts());
@@ -1325,10 +1959,20 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
     }
 
-    private static class TraversalBagManager
+    private static class TraversalBagChain
     {
-        private List<TraversalBag>                                  traversalBags = Collections.emptyList();
-        private CachedElement<RoundRobinListIterator<TraversalBag>> iterator      = CachedElement.of(() -> IteratorUtils.roundRobinListIterator(this.traversalBags));
+        private List<TraversalBag>                                  traversalBags;
+        private CachedElement<RoundRobinListIterator<TraversalBag>> iterator = CachedElement.of(() -> IteratorUtils.roundRobinListIterator(this.traversalBags));
+
+        public TraversalBagChain(List<TraversalBag> traversalBags)
+        {
+            this.traversalBags = traversalBags;
+        }
+
+        public TraversalBag getPrimaryTraversalBag()
+        {
+            return ListUtils.first(this.traversalBags);
+        }
 
         public <R> R processNextAndGet(Function<TraversalBag, R> operation)
         {
@@ -1359,32 +2003,12 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             return result;
         }
 
-        public TraversalBagManager apply(List<ForwardFunctionsContext> forwardFunctionContexts)
-        {
-            this.traversalBags = StreamUtils.withIntCounter(Optional.ofNullable(forwardFunctionContexts)
-                                                                    .orElse(Collections.emptyList())
-                                                                    .stream())
-                                            .map(forwardFunctionContextAndStep -> new TraversalBag(forwardFunctionContextAndStep.getFirst(),
-                                                                                                   forwardFunctionContextAndStep.getSecond()))
-                                            .collect(Collectors.toList());
-            return this;
-        }
-
         public TraversalStepContext getPrimaryTraversalStepContext()
         {
             return this.traversalBags.stream()
                                      .findFirst()
                                      .map(TraversalBag::getCurrentTraversalStepContext)
                                      .get();
-        }
-
-        public TraversalBagManager initializePrimaryBagWithNodes(List<NodeAndContext> startNodeAndContexts)
-        {
-            this.traversalBags.stream()
-                              .findFirst()
-                              .get()
-                              .setCurrentNodeAndContexts(startNodeAndContexts);
-            return this;
         }
 
         public boolean hasUnprocessedNodes()
@@ -1394,18 +2018,122 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
     }
 
+    private static class TraversalBagManager
+    {
+        private List<TraversalBagChain>                                  traversalBagChains = new ArrayList<>();
+        private CachedElement<RoundRobinListIterator<TraversalBagChain>> iterator           = CachedElement.of(() -> IteratorUtils.roundRobinListIterator(this.traversalBagChains));
+
+        public <R> R processNextAndGet(Function<TraversalBag, R> operation)
+        {
+            return this.iterator.get()
+                                .next()
+                                .processNextAndGet(operation);
+        }
+
+        /**
+         * Returns all the start nodes of the overall first iterations.
+         */
+        public List<NodeAndContext> getStartNodesAndContexts()
+        {
+            return this.traversalBagChains.stream()
+                                          .map(TraversalBagChain::getPrimaryTraversalBag)
+                                          .map(TraversalBag::getCurrentNodeAndContexts)
+                                          .flatMap(List<NodeAndContext>::stream)
+                                          .collect(Collectors.toList());
+        }
+
+        public TraversalBagManager apply(Graph graph, StartNodeAndForwardFunctionContextTracks startNodeAndForwardFunctionContextTracks)
+        {
+            startNodeAndForwardFunctionContextTracks.forEachTrack(track ->
+            {
+                List<TrackStepContext> forwardFunctionContexts = track.getForwardFunctionContexts();
+                Set<NodeIdentity> startNodes = track.getStartNodes();
+                List<NodeAndContext> startNodeAndContexts = Optional.ofNullable(startNodes)
+                                                                    .orElse(Collections.emptySet())
+                                                                    .stream()
+                                                                    .map(graph::findNodeById)
+                                                                    .filter(Optional::isPresent)
+                                                                    .map(Optional::get)
+                                                                    .map(NodeAndContext::of)
+                                                                    .collect(Collectors.toList());
+                List<TraversalBag> traversalBags = StreamUtils.withIntCounter(Optional.ofNullable(forwardFunctionContexts)
+                                                                                      .orElse(Collections.emptyList())
+                                                                                      .stream())
+                                                              .map(forwardFunctionContextAndStep -> new TraversalBag(forwardFunctionContextAndStep.getFirst(),
+                                                                                                                     forwardFunctionContextAndStep.getSecond()).setCurrentNodeAndContexts(startNodeAndContexts))
+                                                              .collect(Collectors.toList());
+                this.traversalBagChains.add(new TraversalBagChain(traversalBags));
+            });
+            return this;
+        }
+
+        public TraversalStepContext getPrimaryTraversalStepContext()
+        {
+            return ListUtils.first(this.traversalBagChains)
+                            .getPrimaryTraversalStepContext();
+        }
+
+        public boolean hasUnprocessedNodes()
+        {
+            return this.traversalBagChains.stream()
+                                          .anyMatch(TraversalBagChain::hasUnprocessedNodes);
+        }
+    }
+
+    private static class SuspendedNodesStack implements Consumer<List<NodeAndContext>>
+    {
+        private Set<NodeAndContext> nodes = new HashSet<>();
+
+        @Override
+        public void accept(List<NodeAndContext> nodes)
+        {
+            if (nodes != null)
+            {
+                this.nodes.addAll(nodes);
+            }
+        }
+
+        public Stream<NodeAndContext> drainAll()
+        {
+            return SetUtils.drainAll(this.nodes)
+                           .stream();
+        }
+
+    }
+
+    public static class TraversalBagId
+    {
+    }
+
     private static class TraversalBag
     {
-        private final ForwardFunctionsContext forwardFunctionContext;
-        private final int                     step;
-        private final ExpandedNodesFilter     expandedNodesfilter = this.createExpandedNodesFilter();
+        private final TraversalBagId      traversalBagId      = new TraversalBagId();
+        private final TrackStepContext    trackStepContext;
+        private final int                 step;
+        private final ExpandedNodesFilter expandedNodesfilter = this.createExpandedNodesFilter();
+        private final SuspendedNodesStack suspendedNodesStack = new SuspendedNodesStack();
 
         private List<NodeAndContext> currentNodeAndContexts = new ArrayList<>();
 
-        public TraversalBag(ForwardFunctionsContext forwardFunctionContext, int step)
+        public TraversalBag(TrackStepContext trackStepContext, int step)
         {
-            this.forwardFunctionContext = forwardFunctionContext;
+            this.trackStepContext = trackStepContext;
             this.step = step;
+        }
+
+        public TraversalBagId getTraversalBagId()
+        {
+            return this.traversalBagId;
+        }
+
+        public SuspendedNodesStack getSuspendedNodesStack()
+        {
+            return this.suspendedNodesStack;
+        }
+
+        public List<EdgeFilter> getEdgeFilters()
+        {
+            return this.trackStepContext.getEdgeFilters();
         }
 
         public ExpandedNodesFilter getExpandedNodesFilter()
@@ -1415,8 +2143,8 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
         public TraversalBag appendNodeAndContextsFromPreviousBag(Set<NodeAndContext> processedNodeAndContexts)
         {
-            TraversalStepFilter filter = this.forwardFunctionContext.getTraversalStepFilter()
-                                                                    .orElse((node, context) -> true);
+            TraversalStepFilter filter = this.trackStepContext.getTraversalStepFilter()
+                                                              .orElse((node, context) -> true);
             Optional.ofNullable(processedNodeAndContexts)
                     .orElse(Collections.emptySet())
                     .stream()
@@ -1428,6 +2156,11 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         public boolean hasUnprocessedNodes()
         {
             return !this.currentNodeAndContexts.isEmpty();
+        }
+
+        public boolean hasOwnVisitedNodesContext()
+        {
+            return this.trackStepContext.hasOwnVisitedNodesContext();
         }
 
         public TraversalStepContext getCurrentTraversalStepContext()
@@ -1443,15 +2176,15 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                 @Override
                 public ForwardNodeFunction getForwardNodeFunction()
                 {
-                    return TraversalBag.this.forwardFunctionContext.getForwardFunctionsProvider()
-                                                                   .forwardNodeFunction();
+                    return TraversalBag.this.trackStepContext.getForwardFunctionsProvider()
+                                                             .forwardNodeFunction();
                 }
 
                 @Override
                 public Direction getDirection()
                 {
-                    return TraversalBag.this.forwardFunctionContext.getForwardFunctionsProvider()
-                                                                   .direction();
+                    return TraversalBag.this.trackStepContext.getForwardFunctionsProvider()
+                                                             .direction();
                 }
             };
         }
@@ -1469,7 +2202,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
         public ForwardFunctionsProvider getForwardFunctions()
         {
-            return this.forwardFunctionContext.getForwardFunctionsProvider();
+            return this.trackStepContext.getForwardFunctionsProvider();
         }
 
         private ExpandedNodesFilter createExpandedNodesFilter()
@@ -1491,6 +2224,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                 }
             };
         }
+
     }
 
     private static class VisitedNodesFilterStrategy
@@ -1517,8 +2251,9 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
     public static class VistedNodesContext
     {
-        private Set<NodeIdentity> visitedNodes = new HashSet<>();
-        private boolean           includeFirstVisitedNodeHitRoutes;
+        private Set<NodeIdentity>                      globalVisitedNodes           = new HashSet<>();
+        private Map<TraversalBagId, Set<NodeIdentity>> traversalBagIdToVisitedNodes = new HashMap<>();
+        private boolean                                includeFirstVisitedNodeHitRoutes;
 
         public VistedNodesContext(boolean includeFirstVisitedNodeHitRoutes)
         {
@@ -1526,30 +2261,69 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             this.includeFirstVisitedNodeHitRoutes = includeFirstVisitedNodeHitRoutes;
         }
 
-        public VisitedNodesHandler newVisitedNodesHandler(ExpandedNodesFilter expandedNodesFilter)
+        protected VisitedNodesHandler newVisitedNodesHandler(TraversalBag traversalBag, EdgeAndNodeTraversalListener edgeTraversalListener)
         {
-            return new VisitedNodesHandler(this.includeFirstVisitedNodeHitRoutes, this.visitedNodes, expandedNodesFilter);
+            Set<NodeIdentity> visitedNodes = traversalBag.hasOwnVisitedNodesContext()
+                    ? this.traversalBagIdToVisitedNodes.computeIfAbsent(traversalBag.getTraversalBagId(), id -> new HashSet<>())
+                    : this.globalVisitedNodes;
+            return new VisitedNodesHandler(this.includeFirstVisitedNodeHitRoutes, visitedNodes, traversalBag.getExpandedNodesFilter(), edgeTraversalListener);
         }
+    }
+
+    public static interface EdgeAndNodeTraversalListener extends Consumer<TraversedEdge>
+    {
+        public void accept(Node node);
+    }
+
+    private static class EdgeAndNodeTraversalListenerManager implements EdgeAndNodeTraversalListener
+    {
+        private List<EdgeAndNodeTraversalListener> listeners = new ArrayList<>();
+
+        @Override
+        public void accept(TraversedEdge edge)
+        {
+            this.listeners.forEach(listener -> listener.accept(edge));
+        }
+
+        @Override
+        public void accept(Node node)
+        {
+            this.listeners.forEach(listener -> listener.accept(node));
+        }
+
+        public EdgeAndNodeTraversalListenerManager add(EdgeAndNodeTraversalListener listener)
+        {
+            if (listener != null)
+            {
+                this.listeners.add(listener);
+            }
+            return this;
+        }
+
     }
 
     public static class VisitedNodesHandler
     {
-        private Set<NodeIdentity>   visitedNodes;
-        private ExpandedNodesFilter expandedNodesFilter;
-        private boolean             includeFirstVisitedNodeHitRoutes;
+        private Set<NodeIdentity>            visitedNodes;
+        private ExpandedNodesFilter          expandedNodesFilter;
+        private boolean                      includeFirstVisitedNodeHitRoutes;
+        private EdgeAndNodeTraversalListener edgeTraversalListener;
 
-        public VisitedNodesHandler(boolean includeFirstVisitedNodeHitRoutes, Set<NodeIdentity> visitedNodes, ExpandedNodesFilter expandedNodesFilter)
+        public VisitedNodesHandler(boolean includeFirstVisitedNodeHitRoutes, Set<NodeIdentity> visitedNodes, ExpandedNodesFilter expandedNodesFilter,
+                                   EdgeAndNodeTraversalListener edgeTraversalListener)
         {
             this.includeFirstVisitedNodeHitRoutes = includeFirstVisitedNodeHitRoutes;
             this.visitedNodes = visitedNodes;
             this.expandedNodesFilter = expandedNodesFilter;
+            this.edgeTraversalListener = edgeTraversalListener;
         }
 
         public <R> Stream<R> filterVisitedNodesUpfrontOrExecute(NodeAndContext currentNodeAndContext, Set<NodeAndContext> visitedNodesHitPaths,
                                                                 Function<Predicate<TraversedEdge>, Stream<R>> operation)
         {
-            NodeIdentity currentNodeIdentity = currentNodeAndContext.getNode()
-                                                                    .getIdentity();
+            Node currentNode = currentNodeAndContext.getNode();
+            NodeIdentity currentNodeIdentity = currentNode.getIdentity();
+
             this.visitedNodes.add(currentNodeIdentity);
 
             if (!this.expandedNodesFilter.test(currentNodeIdentity))
@@ -1570,6 +2344,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                            .ifFalseThen(excludedNode -> visitedNodesHitPaths.add(currentNodeAndContext.append(edge)))
                                                            .test(nodeIdentity);
                         this.visitedNodes.add(nodeIdentity);
+
                         return testResult;
                     });
                 }
@@ -1578,6 +2353,36 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             {
                 return Stream.empty();
             }
+        }
+
+        private void populateToEdgeTraversalListener(TraversedEdge edge)
+        {
+            Optional.ofNullable(this.edgeTraversalListener)
+                    .ifPresent(listener -> listener.accept(edge));
+        }
+
+        private void populateToEdgeTraversalListener(Node node)
+        {
+            Optional.ofNullable(this.edgeTraversalListener)
+                    .ifPresent(listener -> listener.accept(node));
+        }
+
+        public List<NodeAndContext> peekAndPopulateToEdgeTraversalListener(List<NodeAndContext> nodes)
+        {
+            Optional.ofNullable(nodes)
+                    .orElse(Collections.emptyList())
+                    .forEach(nodeAndContext ->
+                    {
+                        Optional<TraversedEdge> edge = nodeAndContext.getEdge();
+                        edge.ifPresent(this::populateToEdgeTraversalListener);
+
+                        if (!edge.isPresent())
+                        {
+                            this.populateToEdgeTraversalListener(nodeAndContext.getNode());
+                        }
+                    });
+
+            return nodes;
         }
     }
 
@@ -1646,6 +2451,11 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         public NodeAndContext(Node node, List<Node> path, List<TraversedEdge> edges, double budgetScore)
         {
             this(new NodeAndPath(node, path), edges, budgetScore);
+        }
+
+        public Optional<TraversedEdge> getEdge()
+        {
+            return ListUtils.optionalLast(this.edges);
         }
 
         public NodeAndContext(NodeAndPath nodeAndPath, List<TraversedEdge> edges, double budgetScore)

@@ -17,10 +17,15 @@ package org.omnaest.utils.graph.domain;
 
 import java.util.Collection;
 import java.util.Optional;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import org.omnaest.utils.graph.GraphUtils;
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.graph.domain.edge.Edge;
+import org.omnaest.utils.graph.domain.edge.Edges;
 import org.omnaest.utils.graph.domain.node.Node;
 import org.omnaest.utils.graph.domain.node.NodeIdentity;
 import org.omnaest.utils.graph.domain.node.Nodes;
@@ -52,6 +57,14 @@ public interface Graph extends Streamable<Node>
      */
     public Nodes findNodesByIds(Collection<NodeIdentity> nodeIdentities);
 
+    /**
+     * Similar to {@link #findNodesByIds(Collection)}
+     * 
+     * @param nodeIdentities
+     * @return
+     */
+    public Nodes findNodesByIds(NodeIdentity... nodeIdentities);
+
     public GraphRouter routing();
 
     public int size();
@@ -75,6 +88,84 @@ public interface Graph extends Streamable<Node>
      * @return
      */
     public GraphSerializer serialize();
+
+    public GraphIndexNodeSelector index();
+
+    public static interface GraphIndexNodeSelector
+    {
+        public GraphIndexBuilder forAllNodes();
+
+        public GraphIndexBuilder forNodes(NodeInclusionFilter nodeInclusionFilter);
+    }
+
+    public static interface NodeInclusionFilter extends Predicate<Node>
+    {
+    }
+
+    public static interface GraphIndexBuilder extends GraphTokenIndexBuilderBase
+    {
+        public <K> TypedGraphIndexBuilder<K> withNodeToKeyMapper(NodeToKeysMapper<K> nodeToKeysMapper);
+
+        public <K> TypedGraphIndexBuilder<K> withNodeToKeyMapper(NodeToKeysMapper<K> nodeToKeysMapper, KeyMapper<K> keyMapper);
+    }
+
+    public static interface GraphTokenIndexBuilderBase
+    {
+        public GraphTokenIndexBuilder withNodeToTokenMapper(NodeToTokensMapper nodeToTokensMapper);
+
+        public GraphTokenIndexBuilder withNodeToTokenMapper(NodeToTokensMapper nodeToTokensMapper, TokenMapper tokenMapper);
+
+        public GraphTokenIndexBuilder withNodeIdentitiesTokenMapper();
+
+        public GraphTokenIndexBuilder withNodeIdentitiesTokenMapperIgnoringCase();
+    }
+
+    public static interface GraphTokenIndexBuilder extends GraphTokenIndexBuilderBase, Supplier<GraphTokenIndex>
+    {
+        @Override
+        public GraphTokenIndex get();
+
+    }
+
+    public static interface TypedGraphIndexBuilder<K> extends Supplier<TypedGraphIndex<K>>
+    {
+        public TypedGraphIndexBuilder<K> withNodeToKeyMapper(NodeToKeysMapper<K> nodeToKeysMapper);
+
+        public TypedGraphIndexBuilder<K> withNodeToKeyMapper(NodeToKeysMapper<K> nodeToKeysMapper, KeyMapper<K> keyMapper);
+
+        @Override
+        public TypedGraphIndex<K> get();
+    }
+
+    public static interface NodeToKeysMapper<K> extends Function<Node, Stream<K>>
+    {
+    }
+
+    public static interface KeyMapper<K> extends Function<K, Stream<K>>
+    {
+    }
+
+    public static interface TokenMapper extends KeyMapper<String>
+    {
+    }
+
+    public static interface NodeToTokensMapper extends NodeToKeysMapper<String>
+    {
+    }
+
+    public static interface TypedGraphIndex<K> extends Function<K, Stream<Node>>
+    {
+        @Override
+        public Stream<Node> apply(K key);
+    }
+
+    public static interface GraphTokenIndex extends TypedGraphIndex<String>
+    {
+
+        @Override
+        public Stream<Node> apply(String token);
+
+    }
 
     /**
      * Finds an {@link Edge} from one {@link NodeIdentity} to another. Be aware that the edge is direction dependent.
@@ -112,5 +203,47 @@ public interface Graph extends Streamable<Node>
 
         public Graph build();
     }
+
+    public Edges edges();
+
+    public Nodes nodes();
+
+    public boolean contains(NodeIdentity nodeIdentity);
+
+    public boolean containsAny(NodeIdentity... nodeIdentities);
+
+    public GraphTransformer transform();
+
+    public static interface GraphTransformer
+    {
+        public GraphTransformer filter(Predicate<Node> nodeInclusionFilter);
+
+        public GraphTransformer addNodes(Iterable<NodeIdentity> nodes);
+
+        public GraphTransformer addNodes(NodeIdentity... nodes);
+
+        public GraphTransformer addEdges(Iterable<EdgeIdentity> edges);
+
+        public Graph collect();
+
+        public GraphTransformer addEdge(EdgeIdentity edge);
+
+        public GraphTransformer addEdge(NodeIdentity from, NodeIdentity to);
+
+        public GraphTransformer addNode(NodeIdentity node);
+
+        /**
+         * Maps a given {@link Node}. The edge connections to the current node are remapped to the {@link NodeIdentity} returned by the mapper function.
+         * 
+         * @param mapper
+         * @return
+         */
+        public GraphTransformer map(Function<Node, NodeIdentity> mapper);
+
+    }
+
+    public boolean isNotEmpty();
+
+    public boolean isEmpty();
 
 }

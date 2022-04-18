@@ -24,6 +24,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.JSONHelper;
+import org.omnaest.utils.SetUtils;
 import org.omnaest.utils.graph.domain.attributes.Attribute;
 import org.omnaest.utils.graph.domain.attributes.Tag;
 import org.omnaest.utils.graph.domain.edge.Edge;
@@ -32,10 +33,10 @@ import org.omnaest.utils.graph.domain.node.Node;
 import org.omnaest.utils.graph.domain.node.NodeIdentity;
 import org.omnaest.utils.graph.domain.node.Nodes;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
+import org.omnaest.utils.graph.internal.data.GraphDataIndexAccessor;
+import org.omnaest.utils.graph.internal.data.components.GraphNodeDataIndex.NodeData;
 import org.omnaest.utils.graph.internal.edge.EdgeImpl;
 import org.omnaest.utils.graph.internal.edge.EdgesImpl;
-import org.omnaest.utils.graph.internal.index.GraphIndexAccessor;
-import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.NodeData;
 
 /**
  * @see Node
@@ -43,11 +44,11 @@ import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.Node
  */
 public class NodeImpl implements Node
 {
-    private final NodeIdentity        nodeIdentity;
-    private final GraphIndexAccessor  graphIndexAccessor;
-    private final NodeResolverSupport nodeResolverSupport;
+    private final NodeIdentity           nodeIdentity;
+    private final GraphDataIndexAccessor graphIndexAccessor;
+    private final NodeResolverSupport    nodeResolverSupport;
 
-    public NodeImpl(NodeIdentity nodeIdentity, GraphIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
+    public NodeImpl(NodeIdentity nodeIdentity, GraphDataIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
     {
         this.nodeIdentity = nodeIdentity;
         this.graphIndexAccessor = graphIndexAccessor;
@@ -70,6 +71,14 @@ public class NodeImpl implements Node
     public Nodes getIncomingNodes()
     {
         return new NodesImpl(this.graphIndexAccessor.getIncomingNodes(this.nodeIdentity), this.graphIndexAccessor, this.nodeResolverSupport);
+    }
+
+    @Override
+    public Nodes getConnectedNodes()
+    {
+        return new NodesImpl(SetUtils.merge(this.graphIndexAccessor.getIncomingNodes(this.nodeIdentity),
+                                            this.graphIndexAccessor.getOutgoingNodes(this.nodeIdentity)),
+                             this.graphIndexAccessor, this.nodeResolverSupport);
     }
 
     @Override
@@ -150,6 +159,13 @@ public class NodeImpl implements Node
                                            this.getOutgoingEdges()
                                                .stream())
                                    .collect(Collectors.toList()));
+    }
+
+    @Override
+    public boolean isDetached()
+    {
+        return this.getAllEdges()
+                   .size() == 0;
     }
 
     @Override

@@ -15,23 +15,26 @@
  ******************************************************************************/
 package org.omnaest.utils.graph.internal.node;
 
+import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.omnaest.utils.graph.domain.node.Node;
 import org.omnaest.utils.graph.domain.node.NodeIdentity;
 import org.omnaest.utils.graph.domain.node.Nodes;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
-import org.omnaest.utils.graph.internal.index.GraphIndexAccessor;
+import org.omnaest.utils.graph.internal.data.GraphDataIndexAccessor;
 
 public class NodesImpl implements Nodes
 {
-    private final Set<NodeIdentity>   nodeIdentities;
-    private final GraphIndexAccessor  graphIndexAccessor;
-    private final NodeResolverSupport nodeResolverSupport;
+    private final Set<NodeIdentity>      nodeIdentities;
+    private final GraphDataIndexAccessor graphIndexAccessor;
+    private final NodeResolverSupport    nodeResolverSupport;
 
-    public NodesImpl(Set<NodeIdentity> nodeIdentities, GraphIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
+    public NodesImpl(Set<NodeIdentity> nodeIdentities, GraphDataIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
     {
         this.nodeIdentities = nodeIdentities;
         this.graphIndexAccessor = graphIndexAccessor;
@@ -84,6 +87,34 @@ public class NodesImpl implements Nodes
     public int size()
     {
         return this.nodeIdentities.size();
+    }
+
+    @Override
+    public Set<NodeIdentity> identities()
+    {
+        return Collections.unmodifiableSet(this.nodeIdentities);
+    }
+
+    @Override
+    public Nodes getOutgoingNodes()
+    {
+        return this.determineNextNodes(Node::getOutgoingNodes);
+    }
+
+    private Nodes determineNextNodes(Function<Node, Nodes> resolverFunction)
+    {
+        return new NodesImpl(this.stream()
+                                 .map(resolverFunction)
+                                 .map(Nodes::identities)
+                                 .flatMap(Set::stream)
+                                 .collect(Collectors.toSet()),
+                             this.graphIndexAccessor, this.nodeResolverSupport);
+    }
+
+    @Override
+    public Nodes getIncomingNodes()
+    {
+        return this.determineNextNodes(Node::getIncomingNodes);
     }
 
 }

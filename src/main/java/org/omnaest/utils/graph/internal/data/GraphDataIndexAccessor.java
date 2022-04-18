@@ -1,28 +1,30 @@
-package org.omnaest.utils.graph.internal.index;
+package org.omnaest.utils.graph.internal.data;
 
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.omnaest.utils.graph.domain.attributes.Attribute;
 import org.omnaest.utils.graph.domain.node.NodeIdentity;
-import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.NodeData;
-import org.omnaest.utils.graph.internal.index.filter.GraphNodesFilter;
+import org.omnaest.utils.graph.internal.data.components.GraphNodeDataIndex.NodeData;
+import org.omnaest.utils.graph.internal.data.domain.RawEdge;
+import org.omnaest.utils.graph.internal.data.filter.GraphNodesFilter;
 
-public class GraphIndexAccessor
+public class GraphDataIndexAccessor
 {
-    private GraphIndex       graphIndex;
+    private GraphDataIndex   graphDataIndex;
     private GraphNodesFilter graphNodesFilter;
 
-    public GraphIndexAccessor(GraphIndex graphIndex, GraphNodesFilter graphNodesFilter)
+    public GraphDataIndexAccessor(GraphDataIndex graphDataIndex, GraphNodesFilter graphNodesFilter)
     {
         super();
-        this.graphIndex = graphIndex;
+        this.graphDataIndex = graphDataIndex;
         this.graphNodesFilter = graphNodesFilter;
     }
 
-    public GraphIndex getGraphIndex()
+    public GraphDataIndex getGraphDataIndex()
     {
-        return this.graphIndex;
+        return this.graphDataIndex;
     }
 
     public GraphNodesFilter getGraphNodesFilter()
@@ -32,44 +34,49 @@ public class GraphIndexAccessor
 
     public Set<NodeIdentity> getNodes()
     {
-        return this.graphNodesFilter.getFilteredNodeIdentities(this.graphIndex.getNodes());
+        return this.graphNodesFilter.getFilteredNodeIdentities(this.graphDataIndex.getNodes());
     }
 
     public Set<NodeIdentity> getOutgoingNodes(NodeIdentity nodeIdentity)
     {
-        return this.graphNodesFilter.getFilteredNodeIdentities(this.graphIndex.getOutgoingNodes(nodeIdentity));
+        return this.graphNodesFilter.getFilteredNodeIdentities(this.graphDataIndex.getOutgoingNodes(nodeIdentity));
     }
 
     public Set<NodeIdentity> getIncomingNodes(NodeIdentity nodeIdentity)
     {
-        return this.graphNodesFilter.getFilteredNodeIdentities(this.graphIndex.getIncomingNodes(nodeIdentity));
+        return this.graphNodesFilter.getFilteredNodeIdentities(this.graphDataIndex.getIncomingNodes(nodeIdentity));
     }
 
     public Optional<Set<Attribute>> getEdgeAttributes(NodeIdentity from, NodeIdentity to)
     {
-        return this.graphIndex.getEdgeAttributes(from, to);
+        return this.graphDataIndex.getEdgeAttributes(from, to);
+    }
+
+    public Stream<RawEdge> getEdges()
+    {
+        return this.graphDataIndex.getEdges();
     }
 
     public boolean containsNode(NodeIdentity node)
     {
-        return this.graphNodesFilter.test(node) && this.graphIndex.containsNode(node);
+        return this.graphNodesFilter.test(node) && this.graphDataIndex.containsNode(node);
     }
 
     public boolean hasUnresolvedNodes()
     {
-        return !this.graphIndex.getUnresolvedNodes()
-                               .isEmpty();
+        return !this.graphDataIndex.getUnresolvedNodes()
+                                   .isEmpty();
     }
 
     public Set<NodeIdentity> getUnresolvedNodes()
     {
-        return this.graphNodesFilter.getFilteredNodeIdentities(this.graphIndex.getUnresolvedNodes());
+        return this.graphNodesFilter.getFilteredNodeIdentities(this.graphDataIndex.getUnresolvedNodes());
     }
 
     @Override
     public String toString()
     {
-        return this.graphIndex.toString();
+        return this.graphDataIndex.toString();
     }
 
     @Override
@@ -77,7 +84,7 @@ public class GraphIndexAccessor
     {
         final int prime = 31;
         int result = 1;
-        result = prime * result + ((this.graphIndex == null) ? 0 : this.graphIndex.hashCode());
+        result = prime * result + ((this.graphDataIndex == null) ? 0 : this.graphDataIndex.hashCode());
         result = prime * result + ((this.graphNodesFilter == null) ? 0 : this.graphNodesFilter.hashCode());
         return result;
     }
@@ -93,19 +100,19 @@ public class GraphIndexAccessor
         {
             return false;
         }
-        if (!(obj instanceof GraphIndexAccessor))
+        if (!(obj instanceof GraphDataIndexAccessor))
         {
             return false;
         }
-        GraphIndexAccessor other = (GraphIndexAccessor) obj;
-        if (this.graphIndex == null)
+        GraphDataIndexAccessor other = (GraphDataIndexAccessor) obj;
+        if (this.graphDataIndex == null)
         {
-            if (other.graphIndex != null)
+            if (other.graphDataIndex != null)
             {
                 return false;
             }
         }
-        else if (!this.graphIndex.equals(other.graphIndex))
+        else if (!this.graphDataIndex.equals(other.graphDataIndex))
         {
             return false;
         }
@@ -125,7 +132,7 @@ public class GraphIndexAccessor
 
     public Optional<NodeData> getNodeData(NodeIdentity nodeIdentity)
     {
-        return this.graphIndex.getNodeData(nodeIdentity);
+        return this.graphDataIndex.getNodeData(nodeIdentity);
     }
 
 }

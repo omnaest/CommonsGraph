@@ -2,15 +2,15 @@ package org.omnaest.utils.graph.internal.resolver;
 
 import org.omnaest.utils.graph.domain.GraphResolver;
 import org.omnaest.utils.graph.internal.GraphBuilderImpl.NodeResolverSupport;
-import org.omnaest.utils.graph.internal.index.GraphIndexAccessor;
+import org.omnaest.utils.graph.internal.data.GraphDataIndexAccessor;
 
 public class GraphResolverImpl implements GraphResolver
 {
-    private final GraphIndexAccessor  graphIndexAccessor;
+    private final GraphDataIndexAccessor  graphIndexAccessor;
     private final NodeResolverSupport nodeResolverSupport;
     private int                       depthLimit = Integer.MAX_VALUE;
 
-    public GraphResolverImpl(GraphIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
+    public GraphResolverImpl(GraphDataIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
     {
         this.graphIndexAccessor = graphIndexAccessor;
         this.nodeResolverSupport = nodeResolverSupport;

@@ -23,7 +23,9 @@ import static org.junit.Assert.fail;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -34,6 +36,7 @@ import org.omnaest.utils.JSONHelper;
 import org.omnaest.utils.MapperUtils;
 import org.omnaest.utils.PredicateUtils;
 import org.omnaest.utils.SetUtils;
+import org.omnaest.utils.StringUtils;
 import org.omnaest.utils.element.bi.UnaryBiElement;
 import org.omnaest.utils.graph.domain.Graph;
 import org.omnaest.utils.graph.domain.GraphBuilder;
@@ -44,9 +47,13 @@ import org.omnaest.utils.graph.domain.attributes.Tag;
 import org.omnaest.utils.graph.domain.edge.Edge;
 import org.omnaest.utils.graph.domain.node.Node;
 import org.omnaest.utils.graph.domain.node.NodeIdentity;
+import org.omnaest.utils.graph.domain.traversal.Direction;
 import org.omnaest.utils.graph.domain.traversal.Route;
 import org.omnaest.utils.graph.domain.traversal.RouteAndTraversalControl;
 import org.omnaest.utils.graph.domain.traversal.Routes;
+import org.omnaest.utils.graph.domain.traversal.Traversal.GraphLayer;
+import org.omnaest.utils.graph.domain.traversal.Traversal.GraphSteppedView;
+import org.omnaest.utils.graph.domain.traversal.Traversal.VisitedNodesStatistic;
 import org.omnaest.utils.graph.domain.traversal.TraversalRoutes;
 import org.omnaest.utils.graph.domain.traversal.TraversedEdge;
 import org.omnaest.utils.graph.domain.traversal.hierarchy.HierarchicalNode;
@@ -68,6 +75,8 @@ public class GraphUtilsTest
                                 .addEdge(rootNode, childNode)
                                 .build();
 
+        assertTrue(graph.isNotEmpty());
+        assertFalse(graph.isEmpty());
         assertEquals(SetUtils.toSet("1", "1.1"), graph.stream()
                                                       .map(Node::getIdentity)
                                                       .map(NodeIdentity::getPrimaryId)
@@ -75,6 +84,7 @@ public class GraphUtilsTest
 
         assertTrue(graph.findNodeById(rootNode)
                         .isPresent());
+        assertTrue(graph.containsAny(childNode));
         assertFalse(graph.findNodeById(NodeIdentity.of("non existing node id"))
                          .isPresent());
         assertEquals("1", graph.findNodeById(rootNode)
@@ -96,7 +106,21 @@ public class GraphUtilsTest
                                .get()
                                .getIdentity()
                                .getPrimaryId());
+        assertEquals(SetUtils.toSet(rootNode, childNode), graph.nodes()
+                                                               .stream()
+                                                               .map(Node::getIdentity)
+                                                               .collect(Collectors.toSet()));
 
+    }
+
+    @Test
+    public void testEmptyGraph() throws Exception
+    {
+        Graph graph = GraphUtils.builder()
+                                .build();
+
+        assertFalse(graph.isNotEmpty());
+        assertTrue(graph.isEmpty());
     }
 
     @Test
@@ -124,6 +148,18 @@ public class GraphUtilsTest
         assertEquals(childNode, graph.findNodeById(rootNode)
                                      .map(node -> node.findAllEdgesWithTag(Tag.of("tag1")))
                                      .flatMap(edges -> edges.last())
+                                     .get()
+                                     .getTo()
+                                     .getIdentity());
+        assertEquals(1, graph.edges()
+                             .size());
+        assertEquals(rootNode, graph.edges()
+                                    .first()
+                                    .get()
+                                    .getFrom()
+                                    .getIdentity());
+        assertEquals(childNode, graph.edges()
+                                     .first()
                                      .get()
                                      .getTo()
                                      .getIdentity());
@@ -371,6 +407,41 @@ public class GraphUtilsTest
     }
 
     @Test
+    public void testTraversalStepLimit() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1)
+                                .addEdge(rootNode, intermediateNode2)
+                                .addEdge(rootNode, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode2, childNode3)
+                                .build();
+
+        assertEquals(Arrays.asList(rootNode), graph.routing()
+                                                   .withBreadthFirst()
+                                                   .traverseOutgoing()
+                                                   .limitStepsTo(1)
+                                                   .nodes()
+                                                   .map(Node::getIdentity)
+                                                   .collect(Collectors.toList()));
+        assertEquals(Arrays.asList(rootNode, intermediateNode1, intermediateNode2, intermediateNode3), graph.routing()
+                                                                                                            .withBreadthFirst()
+                                                                                                            .traverseOutgoing()
+                                                                                                            .limitStepsTo(2)
+                                                                                                            .nodes()
+                                                                                                            .map(Node::getIdentity)
+                                                                                                            .collect(Collectors.toList()));
+    }
+
+    @Test
     public void testDiamondTraversal() throws Exception
     {
         NodeIdentity rootNode = NodeIdentity.of("1");
@@ -612,7 +683,7 @@ public class GraphUtilsTest
                      graph.routing()
                           .withBreadthFirst()
                           .traverseOutgoing(rootNode)
-                          .andTraverseIncoming()
+                          .andAfterwardsTraverseIncoming()
                           .stream()
                           .flatMap(TraversalRoutes::stream)
                           .map(RouteAndTraversalControl::get)
@@ -621,6 +692,56 @@ public class GraphUtilsTest
                           .map(Optional::get)
                           .map(Node::getIdentity)
                           .collect(Collectors.toList()));
+    }
+
+    @Test
+    public void testSecondaryMultiDirectionTraversal() throws Exception
+    {
+        NodeIdentity rootNode_1 = NodeIdentity.of("1");
+        NodeIdentity rootNode_2 = NodeIdentity.of("2");
+        NodeIdentity intermediateNode_1_1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode_2_1 = NodeIdentity.of("2.1");
+        NodeIdentity childNode_1_1_1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode_1_1_2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode_1_2_1__2_1_1 = NodeIdentity.of("1.2.1/2.1.1");
+        NodeIdentity detachedNode = NodeIdentity.of("detached");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode_1, intermediateNode_1_1)
+                                .addEdge(intermediateNode_1_1, childNode_1_1_1)
+                                .addEdge(intermediateNode_1_1, childNode_1_1_2)
+                                .addEdge(intermediateNode_1_1, childNode_1_2_1__2_1_1)
+                                .addEdge(rootNode_2, intermediateNode_2_1)
+                                .addEdge(intermediateNode_2_1, childNode_1_2_1__2_1_1)
+                                .addNode(detachedNode)
+                                .build();
+
+        List<Route> routes = graph.routing()
+                                  .withBreadthFirst()
+                                  .traverseOutgoing(rootNode_1)
+                                  .andTraverseIncoming(childNode_1_2_1__2_1_1)
+                                  .routes()
+                                  .collect(Collectors.toList());
+        assertEquals(7, routes.size());
+        assertEquals(SetUtils.toSet(rootNode_1, rootNode_2, intermediateNode_1_1, intermediateNode_2_1, childNode_1_1_1, childNode_1_1_2,
+                                    childNode_1_2_1__2_1_1),
+                     routes.stream()
+                           .flatMap(Route::stream)
+                           .map(Node::getIdentity)
+                           .collect(Collectors.toSet()));
+        assertEquals(Arrays.asList(rootNode_1), routes.get(0)
+                                                      .toNodeIdentities());
+        assertEquals(Arrays.asList(childNode_1_2_1__2_1_1), routes.get(1)
+                                                                  .toNodeIdentities());
+        assertEquals(Arrays.asList(rootNode_1, intermediateNode_1_1), routes.get(2)
+                                                                            .toNodeIdentities());
+        assertEquals(Arrays.asList(childNode_1_2_1__2_1_1, intermediateNode_2_1), routes.get(3)
+                                                                                        .toNodeIdentities());
+        assertEquals(Arrays.asList(rootNode_1, intermediateNode_1_1, childNode_1_1_1), routes.get(4)
+                                                                                             .toNodeIdentities());
+        assertEquals(Arrays.asList(rootNode_1, intermediateNode_1_1, childNode_1_1_2), routes.get(5)
+                                                                                             .toNodeIdentities());
+        assertEquals(Arrays.asList(childNode_1_2_1__2_1_1, intermediateNode_2_1, rootNode_2), routes.get(6)
+                                                                                                    .toNodeIdentities());
     }
 
     @Test
@@ -655,6 +776,34 @@ public class GraphUtilsTest
                                             .getIdentity());
         assertTrue(cycleHitRoute.get()
                                 .isCyclic());
+    }
+
+    @Test
+    public void testTraversalWithEdgeFilter() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        Tag nonTraversalEdge = Tag.of("non traversal");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1)
+                                .addEdgeWithAttributes(rootNode, intermediateNode1, nonTraversalEdge)
+                                .addEdge(rootNode, intermediateNode2)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode2, childNode3)
+                                .build();
+
+        assertEquals(Arrays.asList(rootNode, intermediateNode2, childNode3), graph.routing()
+                                                                                  .withBreadthFirst()
+                                                                                  .traverseOutgoing()
+                                                                                  .withExcludingEdgeByTagFilter(nonTraversalEdge)
+                                                                                  .nodes()
+                                                                                  .map(Node::getIdentity)
+                                                                                  .collect(Collectors.toList()));
     }
 
     @Test
@@ -872,6 +1021,442 @@ public class GraphUtilsTest
                               .collect(Collectors.joining("\n")));
 
         //        System.out.println(json);
+    }
+
+    @Test
+    public void testGraphIndex()
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2", "AbC");
+        NodeIdentity childNode3 = NodeIdentity.of("1.1.3", "abc");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1)
+                                .addEdge(rootNode, intermediateNode2)
+                                .addEdge(rootNode, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode1, childNode3)
+                                .build();
+
+        assertEquals(Arrays.asList(intermediateNode1), graph.index()
+                                                            .forAllNodes()
+                                                            .withNodeIdentitiesTokenMapper()
+                                                            .get()
+                                                            .apply("1.1")
+                                                            .map(Node::getIdentity)
+                                                            .collect(Collectors.toList()));
+        assertEquals(Arrays.asList(childNode3), graph.index()
+                                                     .forAllNodes()
+                                                     .withNodeIdentitiesTokenMapper()
+                                                     .get()
+                                                     .apply("abc")
+                                                     .map(Node::getIdentity)
+                                                     .collect(Collectors.toList()));
+        assertEquals(SetUtils.toSet(childNode2, childNode3), graph.index()
+                                                                  .forAllNodes()
+                                                                  .withNodeIdentitiesTokenMapperIgnoringCase()
+                                                                  .get()
+                                                                  .apply("aBc")
+                                                                  .map(Node::getIdentity)
+                                                                  .collect(Collectors.toSet()));
+    }
+
+    @Test
+    public void testTracingGraph() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        NodeIdentity detachedNode = NodeIdentity.of("detached");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1)
+                                .addEdge(rootNode, intermediateNode2)
+                                .addEdge(rootNode, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode2, childNode3)
+                                .addNode(detachedNode)
+                                .build();
+
+        AtomicInteger graphStepListenerInvocations = new AtomicInteger();
+        List<TraversalRoutes> routes = graph.routing()
+                                            .withBreadthFirst()
+                                            .traverseOutgoing()
+                                            .withTracingGraph()
+                                            .withTracingGraphStepListener(graphView ->
+                                            {
+                                                graphStepListenerInvocations.incrementAndGet();
+                                                assertTrue(graphView.get()
+                                                                    .size() >= 2);
+                                            })
+                                            .stream()
+                                            .collect(Collectors.toList());
+        assertEquals(3, routes.size());
+        assertEquals(3, graphStepListenerInvocations.get());
+        assertEquals(SetUtils.toSet(rootNode, detachedNode), routes.get(0)
+                                                                   .getTracingGraph()
+                                                                   .get()
+                                                                   .nodes()
+                                                                   .stream()
+                                                                   .map(Node::getIdentity)
+                                                                   .collect(Collectors.toSet()));
+        assertEquals(SetUtils.toSet(rootNode, intermediateNode1, intermediateNode2, intermediateNode3, detachedNode), routes.get(1)
+                                                                                                                            .getTracingGraph()
+                                                                                                                            .get()
+                                                                                                                            .nodes()
+                                                                                                                            .stream()
+                                                                                                                            .map(Node::getIdentity)
+                                                                                                                            .collect(Collectors.toSet()));
+        assertEquals(SetUtils.toSet(rootNode, intermediateNode1, intermediateNode2, intermediateNode3, detachedNode, childNode1, childNode2, childNode3),
+                     routes.get(2)
+                           .getTracingGraph()
+                           .get()
+                           .nodes()
+                           .stream()
+                           .map(Node::getIdentity)
+                           .collect(Collectors.toSet()));
+    }
+
+    @Test
+    public void testTracingGraphWithBudgetTraversal() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity intermediateNode4 = NodeIdentity.of("1.4");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        NodeIdentity childNode4 = NodeIdentity.of("1.3.1");
+        NodeIdentity childNode5 = NodeIdentity.of("1.3.2");
+        NodeIdentity childNode6 = NodeIdentity.of("1.3.3");
+        NodeIdentity childNode7 = NodeIdentity.of("1.3.4");
+        NodeIdentity childNode8 = NodeIdentity.of("1.3.5");
+        NodeIdentity leafNode1 = NodeIdentity.of("1.1.1.1");
+        NodeIdentity leafNode2 = NodeIdentity.of("1.1.2.1");
+        NodeIdentity leafNode3 = NodeIdentity.of("1.2.1.1");
+        NodeIdentity leafNode4 = NodeIdentity.of("1.3.1.1");
+        NodeIdentity leafNode5 = NodeIdentity.of("1.3.2.1");
+        NodeIdentity leafNode6 = NodeIdentity.of("1.3.3.1");
+        NodeIdentity leafNode7 = NodeIdentity.of("1.3.4.1");
+        NodeIdentity leafNode8 = NodeIdentity.of("1.3.5.1");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1) // 0.25
+                                .addEdge(rootNode, intermediateNode2) // 0.25
+                                .addEdge(rootNode, intermediateNode3) // 0.25
+                                .addEdge(rootNode, intermediateNode4) // 0.25
+                                .addEdge(intermediateNode1, childNode1) // 0.125
+                                .addEdge(intermediateNode1, childNode2) // 0.125
+                                .addEdge(intermediateNode2, childNode3) // 0.25
+                                .addEdge(intermediateNode3, childNode4) // 0.05
+                                .addEdge(intermediateNode3, childNode5) // 0.05
+                                .addEdge(intermediateNode3, childNode6) // 0.05
+                                .addEdge(intermediateNode3, childNode7) // 0.05
+                                .addEdge(intermediateNode3, childNode8) // 0.05
+                                .addEdge(childNode1, leafNode1) // 0.125
+                                .addEdge(childNode2, leafNode2) // 0.125
+                                .addEdge(childNode3, leafNode3) // 0.25
+                                .addEdge(childNode4, leafNode4) // 0.05
+                                .addEdge(childNode5, leafNode5) // 0.05
+                                .addEdge(childNode6, leafNode6) // 0.05
+                                .addEdge(childNode7, leafNode7) // 0.05
+                                .addEdge(childNode8, leafNode8) // 0.05
+                                .build();
+
+        List<TraversalRoutes> routes = graph.routing()
+                                            .withBreadthFirst()
+                                            .budgetOptimized()
+                                            .traverseOutgoing()
+                                            .withTracingGraph()
+                                            .stream()
+                                            .collect(Collectors.toList());
+
+        assertEquals(6, routes.size());
+        assertEquals(SetUtils.toSet(rootNode), routes.get(0)
+                                                     .getTracingGraph()
+                                                     .get()
+                                                     .nodes()
+                                                     .identities());
+        assertEquals(SetUtils.toSet(rootNode, intermediateNode1, intermediateNode2, intermediateNode3, intermediateNode4), routes.get(1)
+                                                                                                                                 .getTracingGraph()
+                                                                                                                                 .get()
+                                                                                                                                 .nodes()
+                                                                                                                                 .identities());
+        assertEquals(SetUtils.toSet(rootNode, intermediateNode1, intermediateNode2, intermediateNode3, intermediateNode4, childNode1, childNode2, childNode3),
+                     routes.get(2)
+                           .getTracingGraph()
+                           .get()
+                           .nodes()
+                           .identities());
+        assertEquals(SetUtils.toSet(rootNode, intermediateNode1, intermediateNode2, intermediateNode3, intermediateNode4, childNode1, childNode2, childNode3,
+                                    leafNode1, leafNode2, leafNode3),
+                     routes.get(3)
+                           .getTracingGraph()
+                           .get()
+                           .nodes()
+                           .identities());
+        assertEquals(SetUtils.toSet(rootNode, intermediateNode1, intermediateNode2, intermediateNode3, intermediateNode4, childNode1, childNode2, childNode3,
+                                    leafNode1, leafNode2, leafNode3, childNode4, childNode5, childNode6, childNode7, childNode8),
+                     routes.get(4)
+                           .getTracingGraph()
+                           .get()
+                           .nodes()
+                           .identities());
+        assertEquals(SetUtils.toSet(rootNode, intermediateNode1, intermediateNode2, intermediateNode3, intermediateNode4, childNode1, childNode2, childNode3,
+                                    leafNode1, leafNode2, leafNode3, childNode4, childNode5, childNode6, childNode7, childNode8, leafNode4, leafNode5,
+                                    leafNode6, leafNode7, leafNode8),
+                     routes.get(5)
+                           .getTracingGraph()
+                           .get()
+                           .nodes()
+                           .identities());
+    }
+
+    @Test
+    public void testTraverseIntoGraph() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        NodeIdentity detachedNode = NodeIdentity.of("detached");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1)
+                                .addEdge(rootNode, intermediateNode2)
+                                .addEdge(rootNode, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode2, childNode3)
+                                .addNode(detachedNode)
+                                .build();
+
+        GraphSteppedView traversalGraphSteps = graph.routing()
+                                                    .withBreadthFirst()
+                                                    .traverseOutgoing()
+                                                    .and()
+                                                    .viewAsGraph();
+
+        assertEquals(SetUtils.toSet(rootNode, intermediateNode1, intermediateNode2, intermediateNode3, detachedNode, childNode1, childNode2, childNode3),
+                     traversalGraphSteps.last()
+                                        .get()
+                                        .nodes()
+                                        .identities());
+    }
+
+    @Test
+    public void testTraverseEach() throws Exception
+    {
+        NodeIdentity rootNode1 = NodeIdentity.of("1");
+        NodeIdentity rootNode2 = NodeIdentity.of("2");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2/2.1");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("2.2");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2/2.1.1");
+        NodeIdentity childNode3 = NodeIdentity.of("2.1.2");
+        NodeIdentity detachedNode = NodeIdentity.of("detached");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode1, intermediateNode1)
+                                .addEdge(rootNode1, intermediateNode2)
+                                .addEdge(rootNode2, intermediateNode2)
+                                .addEdge(rootNode2, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode2, childNode2)
+                                .addEdge(intermediateNode3, childNode3)
+                                .addNode(detachedNode)
+                                .build();
+
+        VisitedNodesStatistic nodeIdentityToCount = graph.routing()
+                                                         .withBreadthFirst()
+                                                         .traverseEach(Direction.OUTGOING, rootNode1, rootNode2)
+                                                         .and()
+                                                         .getVisitedNodesStatistic();
+
+        assertEquals(1, nodeIdentityToCount.getCountFor(rootNode1));
+        assertEquals(1, nodeIdentityToCount.getCountFor(rootNode2));
+        assertEquals(1, nodeIdentityToCount.getCountFor(intermediateNode1));
+        assertEquals(2, nodeIdentityToCount.getCountFor(intermediateNode2));
+        assertEquals(1, nodeIdentityToCount.getCountFor(intermediateNode3));
+        assertEquals(1, nodeIdentityToCount.getCountFor(childNode1));
+        assertEquals(2, nodeIdentityToCount.getCountFor(childNode2));
+        assertEquals(1, nodeIdentityToCount.getCountFor(childNode3));
+        assertEquals(0, nodeIdentityToCount.getCountFor(detachedNode));
+    }
+
+    @Test
+    public void testTraverseAndViewAsLayers() throws Exception
+    {
+        NodeIdentity rootNode1 = NodeIdentity.of("1");
+        NodeIdentity rootNode2 = NodeIdentity.of("2");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2/2.1");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("2.2");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2/2.1.1");
+        NodeIdentity childNode3 = NodeIdentity.of("2.1.2");
+        NodeIdentity detachedNode = NodeIdentity.of("detached");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode1, intermediateNode1)
+                                .addEdge(rootNode1, intermediateNode2)
+                                .addEdge(rootNode2, intermediateNode2)
+                                .addEdge(rootNode2, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode2, childNode2)
+                                .addEdge(intermediateNode3, childNode3)
+                                .addNode(detachedNode)
+                                .build();
+
+        {
+            List<Graph> layers = graph.routing()
+                                      .withBreadthFirst()
+                                      .traverseEach(Direction.OUTGOING, rootNode1, rootNode2)
+                                      .and()
+                                      .viewAsGraph()
+                                      .layers()
+                                      .byVisitedCount()
+                                      .stream()
+                                      .map(GraphLayer::get)
+                                      .collect(Collectors.toList());
+
+            assertEquals(3, layers.size());
+            assertEquals(Collections.emptySet(), layers.get(0)
+                                                       .nodes()
+                                                       .identities());
+            assertEquals(SetUtils.toSet(rootNode1, rootNode2, intermediateNode1, intermediateNode3, childNode1, childNode3), layers.get(1)
+                                                                                                                                   .nodes()
+                                                                                                                                   .identities());
+            assertEquals(SetUtils.toSet(intermediateNode2, childNode2), layers.get(2)
+                                                                              .nodes()
+                                                                              .identities());
+        }
+        {
+            List<Graph> layers = graph.routing()
+                                      .withBreadthFirst()
+                                      .traverseEach(Direction.OUTGOING, rootNode1, rootNode2)
+                                      .and()
+                                      .viewAsGraph()
+                                      .layers()
+                                      .byAtLeastVisitedCount()
+                                      .stream()
+                                      .map(GraphLayer::get)
+                                      .collect(Collectors.toList());
+
+            assertEquals(3, layers.size());
+            assertEquals(SetUtils.toSet(rootNode1, rootNode2, intermediateNode1, intermediateNode3, childNode1, childNode3, intermediateNode2, childNode2),
+                         layers.get(0)
+                               .nodes()
+                               .identities());
+            assertEquals(SetUtils.toSet(rootNode1, rootNode2, intermediateNode1, intermediateNode3, childNode1, childNode3, intermediateNode2, childNode2),
+                         layers.get(1)
+                               .nodes()
+                               .identities());
+            assertEquals(SetUtils.toSet(intermediateNode2, childNode2), layers.get(2)
+                                                                              .nodes()
+                                                                              .identities());
+        }
+    }
+
+    @Test
+    public void testSifSerialization() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        NodeIdentity detachedNode = NodeIdentity.of("detached");
+        Graph graph = GraphUtils.builder()
+                                .addEdgeWithAttributes(rootNode, intermediateNode1, Tag.of("->"))
+                                .addEdgeWithAttributes(rootNode, intermediateNode2, Tag.of("->"))
+                                .addEdgeWithAttributes(rootNode, intermediateNode3, Tag.of("->"))
+                                .addEdgeWithAttributes(intermediateNode1, childNode1, Tag.of("->"))
+                                .addEdgeWithAttributes(intermediateNode1, childNode2, Tag.of("->"))
+                                .addEdgeWithAttributes(intermediateNode2, childNode3, Tag.of("->"))
+                                .addNode(detachedNode)
+                                .build();
+        assertEquals(StringUtils.builder()
+                                .withLineSeparator("\n")
+                                .addLine("1.1\t->\t1.1.1")
+                                .addLine("1.1\t->\t1.1.2")
+                                .addLine("1.2\t->\t1.2.1")
+                                .addLine("1\t->\t1.1")
+                                .addLine("1\t->\t1.2")
+                                .addLine("1\t->\t1.3")
+                                .addLine("detached\t \t")
+                                .build(),
+                     graph.serialize()
+                          .toSif()
+                          .withLabelProvider(node -> node.getIdentity()
+                                                         .getPrimaryId())
+                          .get());
+
+        assertEquals(graph, GraphUtils.deserialize()
+                                      .asSif()
+                                      .from(graph.serialize()
+                                                 .toSif()
+                                                 .get()));
+    }
+
+    @Test
+    public void testTransformAndCollect() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.2");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, childNode1)
+                                .addEdge(rootNode, childNode2)
+                                .build();
+        assertEquals(graph, graph.transform()
+                                 .collect());
+    }
+
+    @Test
+    public void testTransformAndAdd() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.2");
+        Graph graph = GraphUtils.builder()
+                                .addNodes(rootNode, childNode1)
+                                .addEdge(rootNode, childNode2)
+                                .build();
+        assertEquals(graph, GraphUtils.empty()
+                                      .transform()
+                                      .addNodes(rootNode, childNode1)
+                                      .addEdge(rootNode, childNode2)
+                                      .collect());
+    }
+
+    @Test
+    public void testTransformAndMap() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.2");
+        assertEquals(GraphUtils.builder()
+                               .addEdge(rootNode, childNode2)
+                               .build(),
+                     GraphUtils.builder()
+                               .addEdge(rootNode, childNode1)
+                               .build()
+                               .transform()
+                               .map(node -> childNode1.equals(node.getIdentity()) ? childNode2 : node.getIdentity())
+                               .collect());
     }
 
     private Consumer<GraphBuilder> createGraphPreparator()

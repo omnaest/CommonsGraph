@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2021 Danny Kunz
+ * Copyright 2021 Danny  Kunz
  * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License.  You may obtain a copy
@@ -13,25 +13,29 @@
  * License for the specific language governing permissions and limitations under
  * the License.
  ******************************************************************************/
-package org.omnaest.utils.graph.internal.index;
+package org.omnaest.utils.graph.internal.data;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
 import org.omnaest.utils.graph.domain.GraphBuilder.RepositoryProvider;
 import org.omnaest.utils.graph.domain.attributes.Attribute;
 import org.omnaest.utils.graph.domain.node.NodeIdentity;
 import org.omnaest.utils.graph.internal.GraphImpl;
-import org.omnaest.utils.graph.internal.index.components.GraphEdgesIndex;
-import org.omnaest.utils.graph.internal.index.components.GraphIdentityTokenIndex;
-import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex;
-import org.omnaest.utils.graph.internal.index.components.GraphNodeDataIndex.NodeData;
+import org.omnaest.utils.graph.internal.data.components.GraphEdgesIndex;
+import org.omnaest.utils.graph.internal.data.components.GraphIdentityTokenIndex;
+import org.omnaest.utils.graph.internal.data.components.GraphNodeDataIndex;
+import org.omnaest.utils.graph.internal.data.components.GraphNodeDataIndex.NodeData;
+import org.omnaest.utils.graph.internal.data.domain.RawEdge;
 import org.omnaest.utils.json.AbstractJSONSerializable;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonAutoDetect.Visibility;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -40,7 +44,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  * @see GraphImpl
  * @author omnaest
  */
-public class GraphIndex extends AbstractJSONSerializable
+@JsonAutoDetect(getterVisibility = Visibility.NONE)
+public class GraphDataIndex extends AbstractJSONSerializable
 {
     @JsonProperty
     private GraphIdentityTokenIndex graphIdentityTokenIndex;
@@ -57,7 +62,7 @@ public class GraphIndex extends AbstractJSONSerializable
     @JsonProperty
     private GraphNodeDataIndex graphNodeDataIndex;
 
-    public GraphIndex(RepositoryProvider repositoryProvider)
+    public GraphDataIndex(RepositoryProvider repositoryProvider)
     {
         super();
         this.graphIdentityTokenIndex = new GraphIdentityTokenIndex(repositoryProvider);
@@ -68,12 +73,12 @@ public class GraphIndex extends AbstractJSONSerializable
     }
 
     @JsonCreator
-    protected GraphIndex()
+    protected GraphDataIndex()
     {
         this((name, keyType, valueType) -> new ConcurrentHashMap<>());
     }
 
-    public GraphIndex addNode(NodeIdentity nodeIdentity)
+    public GraphDataIndex addNode(NodeIdentity nodeIdentity)
     {
         if (nodeIdentity != null)
         {
@@ -84,7 +89,7 @@ public class GraphIndex extends AbstractJSONSerializable
         return this;
     }
 
-    public GraphIndex addNodes(Collection<NodeIdentity> nodeIdentities)
+    public GraphDataIndex addNodes(Collection<NodeIdentity> nodeIdentities)
     {
         if (nodeIdentities != null)
         {
@@ -94,12 +99,12 @@ public class GraphIndex extends AbstractJSONSerializable
 
     }
 
-    public GraphIndex addEdge(NodeIdentity from, NodeIdentity to, Collection<Attribute> attributes)
+    public GraphDataIndex addEdge(NodeIdentity from, NodeIdentity to, Collection<Attribute> attributes)
     {
         return this.addEdge(EdgeIdentity.of(from, to), attributes);
     }
 
-    public GraphIndex addEdge(NodeIdentity from, NodeIdentity to)
+    public GraphDataIndex addEdge(NodeIdentity from, NodeIdentity to)
     {
         return this.addEdge(EdgeIdentity.of(from, to));
     }
@@ -127,12 +132,12 @@ public class GraphIndex extends AbstractJSONSerializable
         return this.graphEdgesIndex.getOutgoingNodes(nodeIdentity);
     }
 
-    public GraphIndex addEdge(EdgeIdentity edge)
+    public GraphDataIndex addEdge(EdgeIdentity edge)
     {
         return this.addEdge(edge, null);
     }
 
-    public GraphIndex addEdge(EdgeIdentity edge, Collection<Attribute> attributes)
+    public GraphDataIndex addEdge(EdgeIdentity edge, Collection<Attribute> attributes)
     {
         if (edge != null)
         {
@@ -149,13 +154,13 @@ public class GraphIndex extends AbstractJSONSerializable
         return node != null && this.unresolvedNodes.contains(node);
     }
 
-    public GraphIndex markNodeAsResolved(NodeIdentity node)
+    public GraphDataIndex markNodeAsResolved(NodeIdentity node)
     {
         this.unresolvedNodes.remove(node);
         return this;
     }
 
-    public GraphIndex markNodesAsResolved(Collection<NodeIdentity> nodes)
+    public GraphDataIndex markNodesAsResolved(Collection<NodeIdentity> nodes)
     {
         Optional.ofNullable(nodes)
                 .orElse(Collections.emptyList())
@@ -196,7 +201,7 @@ public class GraphIndex extends AbstractJSONSerializable
         {
             return false;
         }
-        GraphIndex other = (GraphIndex) obj;
+        GraphDataIndex other = (GraphDataIndex) obj;
         if (this.graphEdgesIndex == null)
         {
             if (other.graphEdgesIndex != null)
@@ -249,12 +254,18 @@ public class GraphIndex extends AbstractJSONSerializable
         return this.graphEdgesIndex.getEdge(from, to);
     }
 
+    @JsonIgnore
+    public Stream<RawEdge> getEdges()
+    {
+        return this.graphEdgesIndex.getEdges();
+    }
+
     public NodeData attachNodeDataToNodeAndGet(NodeIdentity nodeIdentity)
     {
         return this.graphNodeDataIndex.attachNodeDataToNodeAndGet(nodeIdentity);
     }
 
-    public GraphIndex updateNodeData(NodeIdentity nodeIdentity, NodeData nodeData)
+    public GraphDataIndex updateNodeData(NodeIdentity nodeIdentity, NodeData nodeData)
     {
         this.graphNodeDataIndex.updateNodeData(nodeIdentity, nodeData);
         return this;

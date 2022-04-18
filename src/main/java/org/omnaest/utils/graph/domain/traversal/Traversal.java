@@ -1,11 +1,20 @@
 package org.omnaest.utils.graph.domain.traversal;
 
+import java.util.Collection;
 import java.util.OptionalDouble;
+import java.util.Set;
 import java.util.function.BiPredicate;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Stream;
 
+import org.omnaest.utils.graph.domain.Graph;
+import org.omnaest.utils.graph.domain.GraphRouter.RoutingStrategy.EdgeFilter;
+import org.omnaest.utils.graph.domain.attributes.Tag;
 import org.omnaest.utils.graph.domain.node.Node;
+import org.omnaest.utils.graph.domain.node.NodeIdentity;
+import org.omnaest.utils.graph.domain.node.Nodes;
 import org.omnaest.utils.graph.domain.traversal.hierarchy.Hierarchy;
 import org.omnaest.utils.stream.Streamable;
 
@@ -134,18 +143,34 @@ public interface Traversal extends Streamable<TraversalRoutes>
     public Hierarchy asHierarchy();
 
     /**
-     * @see #andTraverseOutgoing()
-     * @see #andTraverse(Direction...)
+     * @see #andAfterwardsTraverseOutgoing()
+     * @see #andAfterwardsTraverse(Direction...)
      * @return
      */
-    public Traversal andTraverseIncoming();
+    public Traversal andAfterwardsTraverseIncoming();
 
     /**
-     * @see #andTraverseIncoming()
-     * @see #andTraverse(Direction...)
+     * @see #andTraverseOutgoing(NodeIdentity...)
+     * @see #andTraverse(Direction, NodeIdentity...)
+     * @param startNodes
      * @return
      */
-    public Traversal andTraverseOutgoing();
+    public Traversal andTraverseIncoming(NodeIdentity... startNodes);
+
+    /**
+     * @see #andAfterwardsTraverseIncoming()
+     * @see #andAfterwardsTraverse(Direction...)
+     * @return
+     */
+    public Traversal andAfterwardsTraverseOutgoing();
+
+    /**
+     * @see #andTraverseIncoming(NodeIdentity...)
+     * @see #andTraverse(Direction, NodeIdentity...)
+     * @param startNodes
+     * @return
+     */
+    public Traversal andTraverseOutgoing(NodeIdentity... startNodes);
 
     /**
      * Defines secondary, tertiary, ... directions where nodes are traversed. E.g. if the primary direction is incoming and the secondary direction is
@@ -159,22 +184,93 @@ public interface Traversal extends Streamable<TraversalRoutes>
      * <br>
      * The inclusion filter allows to limit the nodes passed to the next bag of nodes.
      * 
-     * @see #andTraverse(Direction...)
+     * @see #andAfterwardsTraverse(Direction...)
      * @param filter
      * @param directions
      * @return
      */
-    public Traversal andTraverse(Traversal.TraversalStepFilter filter, Direction... directions);
+    public Traversal andAfterwardsTraverse(Traversal.TraversalStepFilter filter, Direction... directions);
 
     /**
-     * Similar to {@link #andTraverse(BiPredicate, Direction...)} without the ability to define a filter.
+     * Similar to {@link #andAfterwardsTraverse(BiPredicate, Direction...)} without the ability to define a filter.
      * 
-     * @see #andTraverse(BiPredicate, Direction...)
-     * @see #andTraverseIncoming()
-     * @see #andTraverseOutgoing()
+     * @see #andAfterwardsTraverse(BiPredicate, Direction...)
+     * @see #andAfterwardsTraverseIncoming()
+     * @see #andAfterwardsTraverseOutgoing()
      * @return
      */
-    public Traversal andTraverse(Direction... directions);
+    public Traversal andAfterwardsTraverse(Direction... directions);
+
+    /**
+     * Allows to traverse a secondary set of start nodes at the same time in the given {@link Direction}
+     * 
+     * @param direction
+     * @param startNodes
+     * @return
+     */
+    public Traversal andTraverse(Direction direction, NodeIdentity... startNodes);
+
+    /**
+     * Similar to {@link #andTraverse(Direction, NodeIdentity...)}
+     * 
+     * @param direction
+     * @param startNodes
+     * @return
+     */
+    public Traversal andTraverse(Direction direction, Collection<NodeIdentity> startNodes);
+
+    /**
+     * Traverses the {@link Graph} but keeps the subgraph traversal from all startnodes in a distinct context, which means the same nodes and pathes can be
+     * traversed twice, if they are on a route that originates from at least two start nodes.
+     * 
+     * @param direction
+     * @param startNodes
+     * @return
+     */
+    public Traversal andTraverseEach(Direction direction, Collection<NodeIdentity> startNodes);
+
+    public Traversal withEdgeFilter(EdgeFilter edgeFilter);
+
+    public Traversal withExcludingEdgeByTagFilter(Tag... tag);
+
+    /**
+     * Enables a {@link Graph}
+     * 
+     * @return
+     */
+    public Traversal withTracingGraph();
+
+    /**
+     * Adds a {@link GraphViewConsumer} as listener which is invoked for each forward step in the traversal.
+     * 
+     * @param graphConsumer
+     * @return
+     */
+    public Traversal withTracingGraphStepListener(GraphViewConsumer graphConsumer);
+
+    public static interface GraphViewConsumer extends Consumer<GraphView>
+    {
+
+    }
+
+    public Traversal andTraverse(Direction direction, TraversalStepFilter filter, NodeIdentity... startNodes);
+
+    public TraversalTerminal and();
+
+    /**
+     * Ensure that the last called traversal definition is run in an own context. That means that e.g. nodes that have been visited by another traversal
+     * chain/step will not be recognized by this traversal.
+     * <br>
+     * <br>
+     * Example:<br>
+     * 
+     * <pre>
+     * traverseOutgoing().withOwnContext().nodes()....
+     * </pre>
+     * 
+     * @return
+     */
+    public Traversal withOwnContext();
 
     /**
      * Inclusion filter for a node to be passed downwards to another processing step/bag
@@ -210,4 +306,121 @@ public interface Traversal extends Streamable<TraversalRoutes>
         }
     }
 
+    public static interface TraversalTerminal
+    {
+        public GraphSteppedView viewAsGraph();
+
+        public VisitedNodesStatistic getVisitedNodesStatistic();
+    }
+
+    /**
+     * @see #get()
+     * @see #layers()
+     * @author omnaest
+     */
+    public static interface GraphView
+    {
+
+        /**
+         * Returns the final {@link Graph} of the traversed {@link Nodes}
+         */
+        public Graph get();
+
+        /**
+         * Allows to slit the final {@link Graph} of the traversed {@link Nodes} into {@link GraphLayers}
+         * 
+         * @see #get()
+         * @return
+         */
+        public GraphLayersSelector layers();
+    }
+
+    /**
+     * @see #stream()
+     * @author omnaest
+     */
+    public static interface GraphSteppedView extends GraphView, Streamable<Graph>
+    {
+
+        /**
+         * Similar to {@link #steps()}
+         */
+        @Override
+        public Stream<Graph> stream();
+
+        /**
+         * Returns a {@link Stream} of a {@link Graph} for each step of the traversal
+         */
+        public default Stream<Graph> steps()
+        {
+            return this.stream();
+        }
+
+    }
+
+    public static interface GraphLayersSelector
+    {
+        /**
+         * Returns the {@link GraphLayers} where the {@link Nodes} of a {@link GraphLayer} have exactly the visitor count
+         * 
+         * @see #byAtLeastVisitedCount()
+         * @return
+         */
+        public GraphLayers byVisitedCount();
+
+        /**
+         * Returns the {@link GraphLayers} where the {@link Nodes} of a {@link GraphLayer} have at least the visitor count
+         * 
+         * @see #byVisitedCount()
+         * @return
+         */
+        public GraphLayers byAtLeastVisitedCount();
+    }
+
+    public static interface GraphLayers extends Streamable<GraphLayer>
+    {
+
+    }
+
+    public static interface GraphLayer extends Supplier<Graph>
+    {
+        /**
+         * Returns the {@link Graph} of this {@link GraphLayers}
+         */
+        @Override
+        public Graph get();
+
+        public int getIndex();
+
+    }
+
+    public static interface VisitedNodesStatistic
+    {
+
+        public int getCountFor(NodeIdentity nodeIdentity);
+
+        public Set<NodeIdentity> nodes();
+
+        public Set<NodeIdentity> nodesByCount(int count);
+
+        public int getNumberOfSteps();
+
+        public int getMaxCount();
+
+    }
+
+    /**
+     * Limits the number of deepness steps to the given number.
+     * 
+     * @param steps
+     */
+    public Traversal limitStepsTo(int steps);
+
+    /**
+     * Skips the given number of steps within the result. Internally such steps are taken.
+     * 
+     * @param steps
+     * @return
+     */
+    public Traversal skipSteps(int steps);
 }

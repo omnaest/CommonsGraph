@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.omnaest.utils.ListUtils;
@@ -251,6 +252,16 @@ public class NodeIdentity implements Supplier<List<String>>
         public Optional<Boolean> booleanValue()
         {
             return this.id.map(Boolean::valueOf);
+        }
+
+        public Optional<String> stringValue()
+        {
+            return this.id.map(String::valueOf);
+        }
+
+        public <R> Optional<R> mappedTo(Function<String, R> mapper)
+        {
+            return this.id.map(mapper);
         }
     }
 

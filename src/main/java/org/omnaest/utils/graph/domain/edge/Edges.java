@@ -1,5 +1,9 @@
 package org.omnaest.utils.graph.domain.edge;
 
+import java.util.Set;
+
+import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
+import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentityWithAttributes;
 import org.omnaest.utils.stream.Streamable;
 
 /**
@@ -10,5 +14,9 @@ import org.omnaest.utils.stream.Streamable;
 public interface Edges extends Streamable<Edge>
 {
     public int size();
+
+    public Set<EdgeIdentity> identities();
+
+    public Set<EdgeIdentityWithAttributes> identitiesWithAttributes();
 
 }

@@ -73,4 +73,9 @@ public class GraphUtils
     {
         return new GraphDeserializerImpl();
     }
+
+    public static Graph empty()
+    {
+        return builder().build();
+    }
 }

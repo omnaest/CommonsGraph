@@ -1,8 +1,12 @@
 package org.omnaest.utils.graph.internal.edge;
 
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentity;
+import org.omnaest.utils.graph.domain.GraphBuilder.EdgeIdentityWithAttributes;
 import org.omnaest.utils.graph.domain.edge.Edge;
 import org.omnaest.utils.graph.domain.edge.Edges;
 
@@ -79,6 +83,22 @@ public class EdgesImpl implements Edges
                .append(this.edges)
                .append("]");
         return builder.toString();
+    }
+
+    @Override
+    public Set<EdgeIdentity> identities()
+    {
+        return this.stream()
+                   .map(Edge::getIdentity)
+                   .collect(Collectors.toSet());
+    }
+
+    @Override
+    public Set<EdgeIdentityWithAttributes> identitiesWithAttributes()
+    {
+        return this.stream()
+                   .map(Edge::getIdentityWithAttributes)
+                   .collect(Collectors.toSet());
     }
 
 }

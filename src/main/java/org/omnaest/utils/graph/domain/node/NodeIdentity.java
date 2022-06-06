@@ -34,7 +34,7 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * 
  * @author omnaest
  */
-public class NodeIdentity implements Supplier<List<String>>
+public class NodeIdentity implements Supplier<List<String>>, Comparable<NodeIdentity>
 {
     @JsonProperty
     private List<String> ids;
@@ -234,6 +234,49 @@ public class NodeIdentity implements Supplier<List<String>>
         return true;
     }
 
+    public int size()
+    {
+        return this.ids.size();
+    }
+
+    @Override
+    public int compareTo(NodeIdentity otherNodeIdentity)
+    {
+        if (otherNodeIdentity == null)
+        {
+            return 1;
+        }
+        else
+        {
+            for (int ii = 0; ii < Math.max(this.ids.size(), otherNodeIdentity.size()); ii++)
+            {
+                Optional<String> currentToken = this.getNthId(ii);
+                Optional<String> otherToken = otherNodeIdentity.getNthId(ii);
+                if (currentToken.isPresent() && !otherToken.isPresent())
+                {
+                    return 1;
+                }
+                else if (!currentToken.isPresent() && otherToken.isPresent())
+                {
+                    return -1;
+                }
+                else
+                {
+                    int compareResult = currentToken.get()
+                                                    .compareTo(otherToken.get());
+                    if (compareResult != 0)
+                    {
+                        return compareResult;
+                    }
+
+                    continue;
+                }
+            }
+
+            return 0;
+        }
+    }
+
     public static class IdMapper
     {
         private Optional<String> id;
@@ -262,6 +305,11 @@ public class NodeIdentity implements Supplier<List<String>>
         public <R> Optional<R> mappedTo(Function<String, R> mapper)
         {
             return this.id.map(mapper);
+        }
+
+        public Optional<Integer> intValue()
+        {
+            return this.id.map(Integer::valueOf);
         }
     }
 

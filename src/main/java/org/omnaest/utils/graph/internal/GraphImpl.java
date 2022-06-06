@@ -399,7 +399,33 @@ public class GraphImpl implements Graph
     @Override
     public Nodes nodes()
     {
-        return new NodesImpl(this.graphIndexAccessor.getNodes(), this.graphIndexAccessor, this.nodeResolverSupport);
+        return this.createNodesByIdentities(this.graphIndexAccessor.getNodes());
+    }
+
+    private NodesImpl createNodesByIdentities(Set<NodeIdentity> nodeIdentities)
+    {
+        return new NodesImpl(nodeIdentities, this.graphIndexAccessor, this.nodeResolverSupport);
+    }
+
+    @Override
+    public Nodes startNodes()
+    {
+        return this.determineNonForwardNodes(Node::getIncomingNodes);
+    }
+
+    @Override
+    public Nodes endNodes()
+    {
+        return this.determineNonForwardNodes(Node::getOutgoingNodes);
+    }
+
+    private Nodes determineNonForwardNodes(Function<Node, Nodes> forwardFunction)
+    {
+        return this.createNodesByIdentities(this.stream()
+                                                .filter(node -> forwardFunction.apply(node)
+                                                                               .hasNone())
+                                                .map(Node::getIdentity)
+                                                .collect(Collectors.toSet()));
     }
 
     @Override

@@ -259,7 +259,8 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     @Override
     public Traversal traverseOutgoing()
     {
-        return this.traverseOutgoing(this.determineStartNodes(node -> node.getIncomingNodes()));
+        return this.traverseOutgoing(this.graph.startNodes()
+                                               .identities());
     }
 
     @Override
@@ -278,7 +279,8 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     @Override
     public Traversal traverseIncoming()
     {
-        return this.traverseIncoming(this.determineStartNodes(node -> node.getOutgoingNodes()));
+        return this.traverseIncoming(this.graph.endNodes()
+                                               .identities());
     }
 
     @Override
@@ -1575,15 +1577,6 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                   });
         }
 
-    }
-
-    private Set<NodeIdentity> determineStartNodes(Function<Node, Nodes> forwardFunction)
-    {
-        return this.graph.stream()
-                         .filter(node -> forwardFunction.apply(node)
-                                                        .hasNone())
-                         .map(Node::getIdentity)
-                         .collect(Collectors.toSet());
     }
 
     private void resolveUnresolvedNodesIfEnabled(Set<NodeIdentity> currentNodes)

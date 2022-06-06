@@ -208,6 +208,10 @@ public interface Graph extends Streamable<Node>
 
     public Nodes nodes();
 
+    public Nodes startNodes();
+
+    public Nodes endNodes();
+
     public boolean contains(NodeIdentity nodeIdentity);
 
     public boolean containsAny(NodeIdentity... nodeIdentities);

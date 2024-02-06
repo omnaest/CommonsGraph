@@ -32,11 +32,14 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import org.omnaest.utils.ComparatorUtils;
 import org.omnaest.utils.JSONHelper;
+import org.omnaest.utils.MapUtils;
 import org.omnaest.utils.MapperUtils;
 import org.omnaest.utils.OptionalUtils;
 import org.omnaest.utils.PredicateUtils;
 import org.omnaest.utils.StreamUtils;
+import org.omnaest.utils.element.bi.BiElement;
 import org.omnaest.utils.exception.handler.ExceptionHandler;
 import org.omnaest.utils.graph.GraphUtils;
 import org.omnaest.utils.graph.domain.Graph;
@@ -62,6 +65,9 @@ import org.omnaest.utils.graph.internal.node.NodesImpl;
 import org.omnaest.utils.graph.internal.resolver.GraphResolverImpl;
 import org.omnaest.utils.graph.internal.router.GraphRouterImpl;
 import org.omnaest.utils.graph.internal.serialization.NodeIdentityKeyDeserializer;
+import org.omnaest.utils.graph.internal.serialization.PlantUmlUtils;
+import org.omnaest.utils.graph.internal.serialization.PlantUmlUtils.ObjectGraphDocument;
+import org.omnaest.utils.graph.internal.serialization.PlantUmlUtils.ObjectGraphDocumentBuilder;
 import org.omnaest.utils.graph.internal.serialization.SIFUtils;
 import org.omnaest.utils.graph.internal.serialization.SIFUtils.SIFResourceBuilder;
 
@@ -198,6 +204,73 @@ public class GraphImpl implements Graph
                 return JSONHelper.serializer(GraphDataIndex.class)
                                  .withKeySerializer(NodeIdentity.class, new NodeIdentityJsonSerializer())
                                  .apply(graphIndex);
+            }
+
+            @Override
+            public PlantUmlSerializer toPlantUml()
+            {
+                return new PlantUmlSerializer()
+                {
+                    private Function<Node, String>              labelProvider  = node -> JSONHelper.serialize(node.getIdentity());
+                    private Function<Node, Map<String, String>> fieldsProvider = node -> Collections.emptyMap();
+
+                    @Override
+                    public PlantUmlSerializer writeInto(File file)
+                    {
+                        this.buildPlantUmlDocument()
+                            .writeInto(file);
+                        return this;
+                    }
+
+                    @Override
+                    public String get()
+                    {
+                        return this.buildPlantUmlDocument()
+                                   .get();
+                    }
+
+                    private ObjectGraphDocument buildPlantUmlDocument()
+                    {
+                        ObjectGraphDocumentBuilder builder = PlantUmlUtils.builder()
+                                                                          .forObjectGraphDocument();
+                        graph.nodes()
+                             .stream()
+                             .map(node -> BiElement.of(node, this.labelProvider.apply(node)))
+                             .sorted(ComparatorUtils.chainedComparator(BiElement<Node, String>::getSecond))
+                             .forEach(nodeAndLabel ->
+                             {
+                                 Map<String, String> fields = this.fieldsProvider.apply(nodeAndLabel.getFirst());
+                                 if (MapUtils.isNotEmpty(fields))
+                                 {
+                                     builder.addObjectWithFields(nodeAndLabel.getSecond(), fields);
+                                 }
+                                 else
+                                 {
+                                     builder.addObject(nodeAndLabel.getSecond());
+                                 }
+                             });
+                        graph.edges()
+                             .stream()
+                             .map(edge -> BiElement.of(this.labelProvider.apply(edge.getFrom()), this.labelProvider.apply(edge.getTo())))
+                             .sorted(ComparatorUtils.chainedComparator(BiElement<String, String>::getFirst, BiElement<String, String>::getSecond))
+                             .forEach(edge -> builder.addAssociation(edge.getFirst(), edge.getSecond()));
+                        return builder.build();
+                    }
+
+                    @Override
+                    public PlantUmlSerializer withLabelProvider(Function<Node, String> labelProvider)
+                    {
+                        this.labelProvider = labelProvider;
+                        return this;
+                    }
+
+                    @Override
+                    public PlantUmlSerializer withFieldsProvider(Function<Node, Map<String, String>> fieldsProvider)
+                    {
+                        this.fieldsProvider = fieldsProvider;
+                        return this;
+                    }
+                };
             }
 
             @Override

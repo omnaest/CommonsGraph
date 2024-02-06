@@ -94,6 +94,28 @@ public interface GraphBuilder
     public GraphBuilder addEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Attribute... attributes);
 
     /**
+     * Adds a given list of elements that have children to {@link NodeIdentity}s and {@link EdgeIdentity}s by the given mapping {@link Function}s
+     * 
+     * @param elements
+     * @param elementChildrenExtractor
+     * @param elementToNodeIdentityMapper
+     * @return
+     */
+    public <E> GraphBuilder addElementsWithChildren(Collection<E> elements, Function<E, Collection<E>> elementChildrenExtractor,
+                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper);
+
+    /**
+     * Similar to {@link #addElementsWithChildren(Collection, Function, Function)}
+     * 
+     * @param elements
+     * @param elementChildrenExtractor
+     * @param elementToNodeIdentityMapper
+     * @return
+     */
+    public <E> GraphBuilder addElementsWithChildren(Stream<E> elements, Function<E, Stream<E>> elementChildrenExtractor,
+                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper);
+
+    /**
      * Adds the forward and backward directed edges
      * 
      * @param from

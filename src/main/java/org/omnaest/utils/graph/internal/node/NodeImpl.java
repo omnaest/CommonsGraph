@@ -282,6 +282,12 @@ public class NodeImpl implements Node
                     {
                         return (double) value;
                     }
+
+                    @Override
+                    public boolean getAsBoolean()
+                    {
+                        return (boolean) value;
+                    }
                 };
             }
         };

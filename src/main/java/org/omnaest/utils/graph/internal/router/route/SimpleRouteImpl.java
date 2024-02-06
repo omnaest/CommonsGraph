@@ -154,4 +154,10 @@ public class SimpleRouteImpl implements SimpleRoute
         return new SimpleRouteImpl(ListUtils.sublist(this.route, 0, this.route.size() - 1), this.graph);
     }
 
+    @Override
+    public int length()
+    {
+        return this.route.size() - 1;
+    }
+
 }

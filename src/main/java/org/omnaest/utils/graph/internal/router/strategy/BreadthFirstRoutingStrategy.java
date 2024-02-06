@@ -316,6 +316,38 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     }
 
     @Override
+    public TraversalBuilder traverse()
+    {
+        return new TraversalBuilder()
+        {
+            @Override
+            public Traversal outgoing()
+            {
+                return BreadthFirstRoutingStrategy.this.traverseOutgoing();
+            }
+
+            @Override
+            public Traversal incoming()
+            {
+                return BreadthFirstRoutingStrategy.this.traverseIncoming();
+            }
+
+            @Override
+            public Traversal direction(Direction direction)
+            {
+                if (Direction.OUTGOING.equals(direction))
+                {
+                    return this.outgoing();
+                }
+                else
+                {
+                    return this.incoming();
+                }
+            }
+        };
+    }
+
+    @Override
     public Traversal traverseEach(Direction direction, NodeIdentity... startNodes)
     {
         return this.traverseEach(direction, Optional.ofNullable(startNodes)
@@ -1492,6 +1524,22 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         {
             this.stepsToSkip = steps;
             return this;
+        }
+
+        @Override
+        public Traversal level(int level)
+        {
+            return this.skipSteps(level)
+                       .limitStepsTo(1);
+        }
+
+        @Override
+        public int deepness()
+        {
+            return this.routes()
+                       .mapToInt(Route::length)
+                       .max()
+                       .orElse(0);
         }
 
     }

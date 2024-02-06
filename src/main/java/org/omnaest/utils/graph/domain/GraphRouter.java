@@ -102,6 +102,17 @@ public interface GraphRouter
 
         public Traversal traverseEach(Direction direction, Collection<NodeIdentity> startNodes);
 
+        public TraversalBuilder traverse();
+
+        public static interface TraversalBuilder
+        {
+            public Traversal outgoing();
+
+            public Traversal incoming();
+
+            public Traversal direction(Direction direction);
+        }
+
     }
 
 }

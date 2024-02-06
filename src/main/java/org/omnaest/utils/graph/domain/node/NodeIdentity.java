@@ -17,6 +17,8 @@ package org.omnaest.utils.graph.domain.node;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
@@ -59,6 +61,13 @@ public class NodeIdentity implements Supplier<List<String>>, Comparable<NodeIden
     public static NodeIdentity of(String... ids)
     {
         return new NodeIdentity(Arrays.asList(ids));
+    }
+
+    public static NodeIdentity of(Collection<String> ids)
+    {
+        return new NodeIdentity(Optional.ofNullable(ids)
+                                        .<List<String>>map(ArrayList::new)
+                                        .orElse(Collections.emptyList()));
     }
 
     public static NodeIdentityBuilder builder()

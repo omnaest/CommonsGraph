@@ -32,6 +32,15 @@ public interface SimpleRoute extends Streamable<Node>
     public boolean isNotCyclic();
 
     /**
+     * Returns the length of the route. If the route contains e.g. two nodes, its length = 1. <br>
+     * <br>
+     * Warning: the length is not equivalent with the number of nodes that span a route
+     * 
+     * @return
+     */
+    public int length();
+
+    /**
      * Adds a new {@link NodeIdentity} to the existing {@link Route} nodes and returns a new {@link Route} instance with that appended {@link NodeIdentity}.
      * 
      * @param nodeIdentity

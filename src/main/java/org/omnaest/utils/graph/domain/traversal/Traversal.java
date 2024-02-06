@@ -35,6 +35,15 @@ public interface Traversal extends Streamable<TraversalRoutes>
      */
     public Traversal includingFirstRouteOfAlreadyVisitedNodes();
 
+    /**
+     * Traverses internally until the given level, but returns only nodes of the given level in successive method calls like {@link Traversal#stream()}. Level
+     * can be 0, 1, 2, ...
+     * 
+     * @param level
+     * @return
+     */
+    public Traversal level(int level);
+
     public Traversal withWeightedPathTermination(double terminationWeightBarrier, Traversal.NodeWeightDeterminationFunction nodeWeightDeterminationFunction);
 
     /**
@@ -139,6 +148,17 @@ public interface Traversal extends Streamable<TraversalRoutes>
      * @return
      */
     public Stream<Node> nodes();
+
+    /**
+     * Same as {@link #nodes()} but returns the {@link NodeIdentity}s.
+     * 
+     * @return
+     */
+    public default Stream<NodeIdentity> identities()
+    {
+        return this.nodes()
+                   .map(Node::getIdentity);
+    }
 
     public Hierarchy asHierarchy();
 
@@ -423,4 +443,12 @@ public interface Traversal extends Streamable<TraversalRoutes>
      * @return
      */
     public Traversal skipSteps(int steps);
+
+    /**
+     * Returns the maximum deepness of all the routes of the traversal. If the graph has cyclic nodes, the deepness determination stops as soon as a cycle is
+     * hit.
+     * 
+     * @return
+     */
+    public int deepness();
 }

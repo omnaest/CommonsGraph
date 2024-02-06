@@ -24,6 +24,7 @@ import static org.junit.Assert.fail;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 import org.junit.Test;
 import org.omnaest.utils.ConsumerUtils;
 import org.omnaest.utils.JSONHelper;
+import org.omnaest.utils.MapUtils;
 import org.omnaest.utils.MapperUtils;
 import org.omnaest.utils.PredicateUtils;
 import org.omnaest.utils.SetUtils;
@@ -110,7 +112,32 @@ public class GraphUtilsTest
                                                                .stream()
                                                                .map(Node::getIdentity)
                                                                .collect(Collectors.toSet()));
+    }
 
+    @Test
+    public void testBuildByElements() throws Exception
+    {
+        Map<String, List<String>> parentToChildren = MapUtils.builder()
+                                                             .put("root1", Arrays.asList("intermediate1", "intermediate2"))
+                                                             .put("intermediate1", Arrays.asList("child1.1", "child1.2"))
+                                                             .put("intermediate2", Arrays.asList("child2.1", "child2.2"))
+                                                             .build();
+
+        Graph graph = GraphUtils.builder()
+                                .addElementsWithChildren(Arrays.asList("root1"), parent -> parentToChildren.get(parent), element -> NodeIdentity.of(element))
+                                .build();
+
+        assertEquals(SetUtils.toSet(NodeIdentity.of("root1"), NodeIdentity.of("intermediate1"), NodeIdentity.of("intermediate2"), NodeIdentity.of("child1.1"),
+                                    NodeIdentity.of("child1.2"), NodeIdentity.of("child2.1"), NodeIdentity.of("child2.2")),
+                     graph.nodes()
+                          .identities());
+        assertEquals(SetUtils.toSet(NodeIdentity.of("intermediate1"), NodeIdentity.of("intermediate2")), graph.routing()
+                                                                                                              .withBreadthFirst()
+                                                                                                              .traverse()
+                                                                                                              .outgoing()
+                                                                                                              .level(1)
+                                                                                                              .identities()
+                                                                                                              .collect(Collectors.toSet()));
     }
 
     @Test
@@ -439,6 +466,59 @@ public class GraphUtilsTest
                                                                                                             .nodes()
                                                                                                             .map(Node::getIdentity)
                                                                                                             .collect(Collectors.toList()));
+    }
+
+    @Test
+    public void testTraversalLevel() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        Graph graph = GraphUtils.builder()
+                                .addEdge(rootNode, intermediateNode1)
+                                .addEdge(rootNode, intermediateNode2)
+                                .addEdge(rootNode, intermediateNode3)
+                                .addEdge(intermediateNode1, childNode1)
+                                .addEdge(intermediateNode1, childNode2)
+                                .addEdge(intermediateNode2, childNode3)
+                                .build();
+
+        assertEquals(Arrays.asList(rootNode), graph.routing()
+                                                   .withBreadthFirst()
+                                                   .traverse()
+                                                   .outgoing()
+                                                   .level(0)
+                                                   .nodes()
+                                                   .map(Node::getIdentity)
+                                                   .collect(Collectors.toList()));
+        assertEquals(Arrays.asList(intermediateNode1, intermediateNode2, intermediateNode3), graph.routing()
+                                                                                                  .withBreadthFirst()
+                                                                                                  .traverse()
+                                                                                                  .outgoing()
+                                                                                                  .level(1)
+                                                                                                  .identities()
+                                                                                                  .collect(Collectors.toList()));
+
+        assertEquals(Arrays.asList(childNode1, childNode2, childNode3), graph.routing()
+                                                                             .withBreadthFirst()
+                                                                             .traverse()
+                                                                             .outgoing()
+                                                                             .level(graph.routing()
+                                                                                         .withBreadthFirst()
+                                                                                         .traverse()
+                                                                                         .outgoing()
+                                                                                         .deepness())
+                                                                             .identities()
+                                                                             .collect(Collectors.toList()));
+        assertEquals(2, graph.routing()
+                             .withBreadthFirst()
+                             .traverse()
+                             .outgoing()
+                             .deepness());
     }
 
     @Test
@@ -1409,6 +1489,53 @@ public class GraphUtilsTest
                                       .from(graph.serialize()
                                                  .toSif()
                                                  .get()));
+    }
+
+    @Test
+    public void testPlantUmlSerialization() throws Exception
+    {
+        NodeIdentity rootNode = NodeIdentity.of("1");
+        NodeIdentity intermediateNode1 = NodeIdentity.of("1.1");
+        NodeIdentity intermediateNode2 = NodeIdentity.of("1.2");
+        NodeIdentity intermediateNode3 = NodeIdentity.of("1.3");
+        NodeIdentity childNode1 = NodeIdentity.of("1.1.1");
+        NodeIdentity childNode2 = NodeIdentity.of("1.1.2");
+        NodeIdentity childNode3 = NodeIdentity.of("1.2.1");
+        NodeIdentity detachedNode = NodeIdentity.of("detached");
+        Graph graph = GraphUtils.builder()
+                                .addEdgeWithAttributes(rootNode, intermediateNode1, Tag.of("->"))
+                                .addEdgeWithAttributes(rootNode, intermediateNode2, Tag.of("->"))
+                                .addEdgeWithAttributes(rootNode, intermediateNode3, Tag.of("->"))
+                                .addEdgeWithAttributes(intermediateNode1, childNode1, Tag.of("->"))
+                                .addEdgeWithAttributes(intermediateNode1, childNode2, Tag.of("->"))
+                                .addEdgeWithAttributes(intermediateNode2, childNode3, Tag.of("->"))
+                                .addNode(detachedNode)
+                                .build();
+        assertEquals(StringUtils.builder()
+                                .withLineSeparator("\n")
+                                .addLine("@startuml")
+                                .addLine("object 1")
+                                .addLine("object 1.1")
+                                .addLine("object 1.1.1")
+                                .addLine("object 1.1.2")
+                                .addLine("object 1.2")
+                                .addLine("object 1.2.1")
+                                .addLine("object 1.3")
+                                .addLine("object detached")
+                                .addLine("1 --> 1.1")
+                                .addLine("1 --> 1.2")
+                                .addLine("1 --> 1.3")
+                                .addLine("1.1 --> 1.1.1")
+                                .addLine("1.1 --> 1.1.2")
+                                .addLine("1.2 --> 1.2.1")
+                                .addLine("@enduml")
+                                .build(),
+                     graph.serialize()
+                          .toPlantUml()
+                          .withLabelProvider(node -> node.getIdentity()
+                                                         .getPrimaryId())
+                          .get());
+
     }
 
     @Test

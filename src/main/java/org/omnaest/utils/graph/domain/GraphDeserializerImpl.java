@@ -75,11 +75,12 @@ public class GraphDeserializerImpl implements GraphDeserializer
                                  .addEdgesWithAttributes(SIFUtils.parse()
                                                                  .from(sif)
                                                                  .map(entry -> EdgeIdentityWithAttributes.of(this.nodeDeserializer.apply(entry.getFrom()),
-                                                                                                            this.nodeDeserializer.apply(entry.getTo()),
-                                                                                                            Tag.of(entry.getType())))
+                                                                                                             this.nodeDeserializer.apply(entry.getTo()),
+                                                                                                             Tag.of(entry.getType())))
                                                                  .collect(Collectors.toList()))
                                  .build();
             }
         };
     }
+
 }

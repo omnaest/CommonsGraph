@@ -21,11 +21,14 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.omnaest.utils.JSONHelper;
 import org.omnaest.utils.MapperUtils;
@@ -157,6 +160,51 @@ public class GraphBuilderImpl implements GraphBuilder
     public GraphBuilder addEdgeWithAttributes(NodeIdentity from, NodeIdentity to, Attribute... attributes)
     {
         return this.addEdgeWithAttributes(from, to, Arrays.asList(attributes));
+    }
+
+    @Override
+    public <E> GraphBuilder addElementsWithChildren(Collection<E> elements, Function<E, Collection<E>> elementChildrenExtractor,
+                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper)
+    {
+        return this.addElementsWithChildren(Optional.ofNullable(elements)
+                                                    .orElse(Collections.emptyList())
+                                                    .stream(),
+                                            element -> Optional.ofNullable(element)
+                                                               .map(elementChildrenExtractor::apply)
+                                                               .map(Collection::stream)
+                                                               .orElse(Stream.empty()),
+                                            elementToNodeIdentityMapper);
+    }
+
+    @Override
+    public <E> GraphBuilder addElementsWithChildren(Stream<E> elements, Function<E, Stream<E>> elementChildrenExtractor,
+                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper)
+    {
+        return this.addElementsWithChildren(Optional.empty(), elements, elementChildrenExtractor, elementToNodeIdentityMapper);
+    }
+
+    public <E> GraphBuilder addElementsWithChildren(Optional<NodeIdentity> parent, Stream<E> elements, Function<E, Stream<E>> elementChildrenExtractor,
+                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper)
+    {
+        if (elements != null && elementToNodeIdentityMapper != null && elementChildrenExtractor != null)
+        {
+            elements.filter(Objects::nonNull)
+                    .forEach(element ->
+                    {
+                        NodeIdentity nodeIdentity = elementToNodeIdentityMapper.apply(element);
+                        if (nodeIdentity != null)
+                        {
+                            this.addNode(nodeIdentity);
+
+                            parent.ifPresent(parentIdentity -> this.addEdge(parentIdentity, nodeIdentity));
+
+                            this.addElementsWithChildren(Optional.of(nodeIdentity), Optional.ofNullable(elementChildrenExtractor.apply(element))
+                                                                                            .orElse(Stream.empty()),
+                                                         elementChildrenExtractor, elementToNodeIdentityMapper);
+                        }
+                    });
+        }
+        return this;
     }
 
     @Override

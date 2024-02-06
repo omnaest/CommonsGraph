@@ -99,6 +99,8 @@ public interface Node
 
         public int getAsInteger();
 
+        public boolean getAsBoolean();
+
         public long getAsLong();
 
         public double getAsDouble();

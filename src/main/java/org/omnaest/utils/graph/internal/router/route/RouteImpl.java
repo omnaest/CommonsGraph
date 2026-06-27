@@ -51,8 +51,7 @@ public class RouteImpl extends SimpleRouteImpl implements Route
     @Override
     public TraversedEdges edges()
     {
-        return new TraversedEdges()
-        {
+        return new TraversedEdges() {
             @Override
             public Stream<TraversedEdge> stream()
             {

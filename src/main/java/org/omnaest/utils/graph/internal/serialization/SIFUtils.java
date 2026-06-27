@@ -20,13 +20,12 @@ public class SIFUtils
 {
     public static SIFResourceBuilder builder()
     {
-        return new SIFResourceBuilder()
-        {
-            private String delimiter             = "\t";
-            private String delimiterEscapeString = "_";
-            private String lineSeparator         = "\n";
+        return new SIFResourceBuilder() {
+            private String        delimiter             = "\t";
+            private String        delimiterEscapeString = "_";
+            private String        lineSeparator         = "\n";
 
-            private StringBuilder stringBuilder = new StringBuilder();
+            private StringBuilder stringBuilder         = new StringBuilder();
 
             @Override
             public SIFResourceBuilder withDelimiter(String delimiter)
@@ -61,8 +60,7 @@ public class SIFUtils
             public SIFResource build()
             {
                 String sif = this.stringBuilder.toString();
-                return new SIFResource()
-                {
+                return new SIFResource() {
 
                     @Override
                     public String get()
@@ -107,8 +105,7 @@ public class SIFUtils
 
     public static SIFParser parse()
     {
-        return new SIFParser()
-        {
+        return new SIFParser() {
             private String delimiter = "\t";
 
             @Override

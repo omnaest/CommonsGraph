@@ -58,8 +58,7 @@ public class TypedGraphIndexBuilderImpl<K> implements TypedGraphIndexBuilder<K>
         List<KeyMapper<K>> keyMappers = this.nodeToKeysMappers.stream()
                                                               .map(TypedGraphIndexBuilderImpl.NodeToKeysMapperContext<K>::getKeyMapper)
                                                               .collect(Collectors.toList());
-        return new TypedGraphIndex<K>()
-        {
+        return new TypedGraphIndex<K>() {
             @Override
             public Stream<Node> apply(K key)
             {

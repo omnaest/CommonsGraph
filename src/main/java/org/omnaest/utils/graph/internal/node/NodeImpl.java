@@ -225,8 +225,7 @@ public class NodeImpl implements Node
     public NodeDataAccessor getData()
     {
         Optional<NodeData> nodeData = this.graphIndexAccessor.getNodeData(this.nodeIdentity);
-        return new NodeDataAccessor()
-        {
+        return new NodeDataAccessor() {
             @Override
             public Map<String, Object> toMap()
             {
@@ -251,8 +250,7 @@ public class NodeImpl implements Node
 
             private Function<Object, NodeDataFieldValueAccessor> createNodeDataFieldValueAccessor()
             {
-                return value -> new NodeDataFieldValueAccessor()
-                {
+                return value -> new NodeDataFieldValueAccessor() {
                     @Override
                     public Object get()
                     {

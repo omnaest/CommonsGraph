@@ -46,8 +46,7 @@ public class GraphTokenIndexBuilderImpl implements GraphTokenIndexBuilder
     public GraphTokenIndex get()
     {
         TypedGraphIndex<String> index = this.builder.get();
-        return new GraphTokenIndex()
-        {
+        return new GraphTokenIndex() {
             @Override
             public Stream<Node> apply(String token)
             {

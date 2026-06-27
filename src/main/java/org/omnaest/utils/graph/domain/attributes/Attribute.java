@@ -17,7 +17,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class Attribute
 {
     @JsonProperty
-    private String key;
+    private String       key;
 
     @JsonProperty
     private List<String> values;

@@ -20,14 +20,12 @@ public class PlantUmlUtils
 {
     public static PlantUmlDocumentBuilder builder()
     {
-        return new PlantUmlDocumentBuilder()
-        {
+        return new PlantUmlDocumentBuilder() {
 
             @Override
             public ObjectGraphDocumentBuilder forObjectGraphDocument()
             {
-                return new ObjectGraphDocumentBuilder()
-                {
+                return new ObjectGraphDocumentBuilder() {
                     private List<String>                     objects          = new ArrayList<>();
                     private Map<String, Map<String, String>> objectIdToFields = new HashMap<>();
                     private Map<String, Set<String>>         assocations      = new LinkedHashMap<>();
@@ -84,8 +82,7 @@ public class PlantUmlUtils
 
                         String documentBody = builder.toString();
 
-                        return new ObjectGraphDocument()
-                        {
+                        return new ObjectGraphDocument() {
                             @Override
                             public String get()
                             {

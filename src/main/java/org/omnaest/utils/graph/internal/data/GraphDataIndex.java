@@ -51,16 +51,16 @@ public class GraphDataIndex extends AbstractJSONSerializable
     private GraphIdentityTokenIndex graphIdentityTokenIndex;
 
     @JsonProperty
-    private GraphEdgesIndex graphEdgesIndex;
+    private GraphEdgesIndex         graphEdgesIndex;
 
     @JsonProperty
-    private Set<NodeIdentity> nodes;
+    private Set<NodeIdentity>       nodes;
 
     @JsonProperty
-    private Set<NodeIdentity> unresolvedNodes;
+    private Set<NodeIdentity>       unresolvedNodes;
 
     @JsonProperty
-    private GraphNodeDataIndex graphNodeDataIndex;
+    private GraphNodeDataIndex      graphNodeDataIndex;
 
     public GraphDataIndex(RepositoryProvider repositoryProvider)
     {

@@ -6,9 +6,9 @@ import org.omnaest.utils.graph.internal.data.GraphDataIndexAccessor;
 
 public class GraphResolverImpl implements GraphResolver
 {
-    private final GraphDataIndexAccessor  graphIndexAccessor;
-    private final NodeResolverSupport nodeResolverSupport;
-    private int                       depthLimit = Integer.MAX_VALUE;
+    private final GraphDataIndexAccessor graphIndexAccessor;
+    private final NodeResolverSupport    nodeResolverSupport;
+    private int                          depthLimit = Integer.MAX_VALUE;
 
     public GraphResolverImpl(GraphDataIndexAccessor graphIndexAccessor, NodeResolverSupport nodeResolverSupport)
     {

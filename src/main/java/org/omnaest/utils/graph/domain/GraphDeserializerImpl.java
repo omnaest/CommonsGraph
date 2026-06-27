@@ -31,8 +31,7 @@ public class GraphDeserializerImpl implements GraphDeserializer
     @Override
     public SIFDeserializer asSif()
     {
-        return new SIFDeserializer()
-        {
+        return new SIFDeserializer() {
             private Function<String, NodeIdentity> nodeDeserializer = JSONHelper.deserializer(NodeIdentity.class);
 
             @Override

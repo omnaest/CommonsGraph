@@ -23,8 +23,7 @@ public class GraphIndexNodeSelectorImpl implements GraphIndexNodeSelector
     @Override
     public GraphIndexBuilder forNodes(NodeInclusionFilter nodeInclusionFilter)
     {
-        return new GraphIndexBuilder()
-        {
+        return new GraphIndexBuilder() {
             @Override
             public GraphTokenIndexBuilder withNodeToTokenMapper(NodeToTokensMapper nodeToTokensMapper)
             {

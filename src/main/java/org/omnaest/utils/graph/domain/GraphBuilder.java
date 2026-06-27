@@ -101,8 +101,7 @@ public interface GraphBuilder
      * @param elementToNodeIdentityMapper
      * @return
      */
-    public <E> GraphBuilder addElementsWithChildren(Collection<E> elements, Function<E, Collection<E>> elementChildrenExtractor,
-                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper);
+    public <E> GraphBuilder addElementsWithChildren(Collection<E> elements, Function<E, Collection<E>> elementChildrenExtractor, Function<E, NodeIdentity> elementToNodeIdentityMapper);
 
     /**
      * Similar to {@link #addElementsWithChildren(Collection, Function, Function)}
@@ -112,8 +111,7 @@ public interface GraphBuilder
      * @param elementToNodeIdentityMapper
      * @return
      */
-    public <E> GraphBuilder addElementsWithChildren(Stream<E> elements, Function<E, Stream<E>> elementChildrenExtractor,
-                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper);
+    public <E> GraphBuilder addElementsWithChildren(Stream<E> elements, Function<E, Stream<E>> elementChildrenExtractor, Function<E, NodeIdentity> elementToNodeIdentityMapper);
 
     /**
      * Adds the forward and backward directed edges

@@ -64,8 +64,7 @@ public interface Traversal extends Streamable<TraversalRoutes>
      * @param nodeWeightDeterminationFunction
      * @return
      */
-    public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier,
-                                                           Traversal.IsolatedNodeWeightDeterminationFunction nodeWeightDeterminationFunction);
+    public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier, Traversal.IsolatedNodeWeightDeterminationFunction nodeWeightDeterminationFunction);
 
     /**
      * @see #withWeightedPathTermination(double, NodeWeightDeterminationFunction)
@@ -73,8 +72,7 @@ public interface Traversal extends Streamable<TraversalRoutes>
      * @param nodeWeightByRouteDeterminationFunction
      * @return
      */
-    public Traversal withWeightedPathTerminationByBranchesAndRoute(double terminationWeightBarrier,
-                                                                   Traversal.IsolatedNodeWeightByRouteDeterminationFunction nodeWeightByRouteDeterminationFunction);
+    public Traversal withWeightedPathTerminationByBranchesAndRoute(double terminationWeightBarrier, Traversal.IsolatedNodeWeightByRouteDeterminationFunction nodeWeightByRouteDeterminationFunction);
 
     public static interface NodeWeightDeterminationFunction
     {

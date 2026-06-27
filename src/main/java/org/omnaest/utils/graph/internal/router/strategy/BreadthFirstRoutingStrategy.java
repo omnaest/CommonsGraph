@@ -318,8 +318,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     @Override
     public TraversalBuilder traverse()
     {
-        return new TraversalBuilder()
-        {
+        return new TraversalBuilder() {
             @Override
             public Traversal outgoing()
             {
@@ -544,17 +543,16 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     private static enum ForwardFunctions implements ForwardFunctionsProvider
     {
         OUTGOING(node -> node.getOutgoingNodes(), node -> TraversedEdges.of(node.getOutgoingEdges(), Edge::getTo, Edge::getFrom),
-                (from, to) -> from.findOutgoingEdgeTo(to.getIdentity()), Direction.OUTGOING),
-        INCOMING(node -> node.getIncomingNodes(), node -> TraversedEdges.of(node.getIncomingEdges(), Edge::getFrom, Edge::getTo),
-                (from, to) -> from.findIncomingEdgeFrom(to.getIdentity()), Direction.INCOMING);
+                (from, to) -> from.findOutgoingEdgeTo(to.getIdentity()), Direction.OUTGOING), INCOMING(node -> node.getIncomingNodes(),
+                        node -> TraversedEdges.of(node.getIncomingEdges(), Edge::getFrom, Edge::getTo),
+                        (from, to) -> from.findIncomingEdgeFrom(to.getIdentity()), Direction.INCOMING);
 
         private ForwardNodeFunction       forwardNodeFunction;
         private ForwardEdgeFunction       forwardEdgeFunction;
         private ForwardEdgeFinderFunction forwardEdgeFinderFunction;
         private Direction                 direction;
 
-        private ForwardFunctions(ForwardNodeFunction forwardNodeFunction, ForwardEdgeFunction forwardEdgeFunction,
-                                 ForwardEdgeFinderFunction forwardEdgeFinderFunction, Direction direction)
+        private ForwardFunctions(ForwardNodeFunction forwardNodeFunction, ForwardEdgeFunction forwardEdgeFunction, ForwardEdgeFinderFunction forwardEdgeFinderFunction, Direction direction)
         {
             this.forwardNodeFunction = forwardNodeFunction;
             this.forwardEdgeFunction = forwardEdgeFunction;
@@ -604,9 +602,9 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     {
         private final ForwardFunctionsProvider forwardFunctionsProvider;
         private final TraversalStepFilter      traversalStepFilter;
-        private final List<EdgeFilter>         edgeFilters = new ArrayList<>();
+        private final List<EdgeFilter>         edgeFilters            = new ArrayList<>();
 
-        private boolean ownVisitedNodesContext = false;
+        private boolean                        ownVisitedNodesContext = false;
 
         public TrackStepContext(ForwardFunctionsProvider forwardFunctionsProvider, TraversalStepFilter traversalStepFilter)
         {
@@ -704,8 +702,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         {
             Graph graph = this.buildGraph();
 
-            this.consumerManager.accept(new GraphViewImpl(Optional.of(new TracingGraphAndStatisticsProvider()
-            {
+            this.consumerManager.accept(new GraphViewImpl(Optional.of(new TracingGraphAndStatisticsProvider() {
                 @Override
                 public VisitedNodesStatistic getVisitedNodesStatistic()
                 {
@@ -824,8 +821,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             return ListUtils.last(this.contexts);
         }
 
-        public StartNodeAndForwardFunctionContextTracks addStartNodesWithContextToCurrentTrack(Set<NodeIdentity> startNodes,
-                                                                                               TrackStepContext forwardFunctionsContext)
+        public StartNodeAndForwardFunctionContextTracks addStartNodesWithContextToCurrentTrack(Set<NodeIdentity> startNodes, TrackStepContext forwardFunctionsContext)
         {
             this.getOrCreateCurrentContextTrack()
                 .addStartNodesWithContext(startNodes, forwardFunctionsContext);
@@ -960,8 +956,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         @Override
         public GraphLayersSelector layers()
         {
-            return new GraphLayersSelector()
-            {
+            return new GraphLayersSelector() {
                 @Override
                 public GraphLayers byVisitedCount()
                 {
@@ -983,14 +978,12 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                                                                  .orElse(new VisitedNodesStatisticImpl(IntegerCountedMap.empty(),
                                                                                                                                        GraphViewImpl.this.numberOfSteps));
                     Graph finalTracingGraph = GraphViewImpl.this.get();
-                    return new GraphLayers()
-                    {
+                    return new GraphLayers() {
                         @Override
                         public Stream<GraphLayer> stream()
                         {
                             return IntStream.rangeClosed(0, visitedNodesStatistic.getMaxCount())
-                                            .mapToObj(count -> new GraphLayer()
-                                            {
+                                            .mapToObj(count -> new GraphLayer() {
                                                 @Override
                                                 public Graph get()
                                                 {
@@ -1051,9 +1044,9 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         private final TraversalStatisticsCollector             traversalStatisticsCollector            = new TraversalStatisticsCollector();
         private final EdgeAndNodeTraversalListenerManager      edgeTraversalListenerManager            = new EdgeAndNodeTraversalListenerManager().add(this.traversalStatisticsCollector);;
 
-        private Optional<TracingGraphManager> tracingGraphManager = Optional.empty();
-        private int                           stepsLimit          = Integer.MAX_VALUE;
-        private int                           stepsToSkip         = 0;
+        private Optional<TracingGraphManager>                  tracingGraphManager                     = Optional.empty();
+        private int                                            stepsLimit                              = Integer.MAX_VALUE;
+        private int                                            stepsToSkip                             = 0;
 
         private TraversalImpl(ForwardFunctionsProvider forwardFunction, Graph graph, Set<NodeIdentity> startNodes)
         {
@@ -1119,7 +1112,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                                             new VisitedNodesStatisticImpl(this.traversalStatisticsCollector.getNodeToVisitedCount(),
                                                                                                           routesControl.getTraversalStepContext()
                                                                                                                        .getStep()
-                                                                                                                  + 1)))
+                                                                                                                                                                     + 1)))
                               .map(MapperUtils.identityCast(TraversalRoutes.class))
                               .peek(PeekUtils.all(this.weightedTerminationHandlers))
                               .skip(this.stepsToSkip)
@@ -1134,8 +1127,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                                     .stream()
                                                                     .map(routes -> (TracingGraphAndStatisticsProvider) routes)
                                                                     .collect(Collectors.toList());
-            return new TraversalTerminal()
-            {
+            return new TraversalTerminal() {
                 @Override
                 public GraphSteppedView viewAsGraph()
                 {
@@ -1176,8 +1168,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
 
         @Override
-        public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier,
-                                                               IsolatedNodeWeightDeterminationFunction nodeWeightDeterminationFunction)
+        public Traversal withWeightedPathTerminationByBranches(double terminationWeightBarrier, IsolatedNodeWeightDeterminationFunction nodeWeightDeterminationFunction)
         {
             return this.withWeightedPathTerminationByBranchesAndRoute(terminationWeightBarrier, route -> route.last()
                                                                                                               .map(nodeWeightDeterminationFunction::applyAsDouble)
@@ -1185,19 +1176,19 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         }
 
         @Override
-        public Traversal withWeightedPathTerminationByBranchesAndRoute(double terminationWeightBarrier,
-                                                                       IsolatedNodeWeightByRouteDeterminationFunction nodeWeightByRouteDeterminationFunction)
+        public Traversal withWeightedPathTerminationByBranchesAndRoute(double terminationWeightBarrier, IsolatedNodeWeightByRouteDeterminationFunction nodeWeightByRouteDeterminationFunction)
         {
             return this.withWeightedPathTermination(terminationWeightBarrier, (node, route, parentWeight, forwardNodeFunction) -> parentWeight.orElse(1.0)
-                    * nodeWeightByRouteDeterminationFunction.applyAsDouble(route) / Math.max(1.0, route.lastNth(1)
-                                                                                                       .map(forwardNodeFunction)
-                                                                                                       .map(Nodes::stream)
-                                                                                                       .orElse(Stream.empty())
-                                                                                                       .map(Node::getIdentity)
-                                                                                                       .map(nodeIdentity -> route.getSubRouteUntilLastNth(1)
-                                                                                                                                 .addToNew(nodeIdentity))
-                                                                                                       .mapToDouble(nodeWeightByRouteDeterminationFunction)
-                                                                                                       .sum()));
+                                                                                                                                  * nodeWeightByRouteDeterminationFunction.applyAsDouble(route)
+                                                                                                                                  / Math.max(1.0, route.lastNth(1)
+                                                                                                                                                       .map(forwardNodeFunction)
+                                                                                                                                                       .map(Nodes::stream)
+                                                                                                                                                       .orElse(Stream.empty())
+                                                                                                                                                       .map(Node::getIdentity)
+                                                                                                                                                       .map(nodeIdentity -> route.getSubRouteUntilLastNth(1)
+                                                                                                                                                                                 .addToNew(nodeIdentity))
+                                                                                                                                                       .mapToDouble(nodeWeightByRouteDeterminationFunction)
+                                                                                                                                                       .sum()));
         }
 
         @Override
@@ -1250,8 +1241,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                                                                       Collectors.mapping((TraversedEdge edge) -> edge,
                                                                                                                          Collectors.toSet())));
 
-            return new Hierarchy()
-            {
+            return new Hierarchy() {
                 @Override
                 public Stream<HierarchicalNode> stream()
                 {
@@ -1264,8 +1254,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                     return node ->
                     {
                         Set<NodeIdentity> parents = SetUtils.toSet(node.getIdentity());
-                        return new HierarchicalNode()
-                        {
+                        return new HierarchicalNode() {
                             @Override
                             public Node get()
                             {
@@ -1294,8 +1283,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                     return edge ->
                     {
                         Node node = edge.getNextNode();
-                        return new HierarchicalNode()
-                        {
+                        return new HierarchicalNode() {
                             @Override
                             public Node get()
                             {
@@ -1349,8 +1337,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                 {
                     return indexAndNodeAndParent ->
                     {
-                        return new ColumnizedHierarchyNode()
-                        {
+                        return new ColumnizedHierarchyNode() {
                             @Override
                             public int getColumnIndex()
                             {
@@ -1407,8 +1394,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
                 private DataBuilder createDataBuilder(Map<String, Object> data)
                 {
-                    return new DataBuilder()
-                    {
+                    return new DataBuilder() {
                         @Override
                         public DataBuilder put(String key, Object value)
                         {
@@ -1548,11 +1534,11 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
     private static class JsonSerializableHierarchyNode
     {
         @JsonProperty
-        private NodeIdentity nodeIdentity;
+        private NodeIdentity                        nodeIdentity;
 
         @JsonProperty
         @JsonInclude(value = Include.NON_EMPTY, content = Include.NON_NULL)
-        private Map<String, Object> data;
+        private Map<String, Object>                 data;
 
         @JsonProperty
         @JsonInclude(Include.NON_NULL)
@@ -1675,10 +1661,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                            .collect(Collectors.toList());
     }
 
-    private List<NodeAndContext> determineNextNodes(ForwardFunctionsProvider forwardFunctions, List<NodeAndContext> currentNodeAndPaths,
-                                                    VisitedNodesHandler visitedNodesHandler, SkipNodes skipNodes,
-                                                    Consumer<Set<NodeAndContext>> visitedNodesHitConsumer, List<EdgeFilter> edgeFilters,
-                                                    SuspendedNodesStack suspendedNodesStack)
+    private List<NodeAndContext> determineNextNodes(ForwardFunctionsProvider forwardFunctions, List<NodeAndContext> currentNodeAndPaths, VisitedNodesHandler visitedNodesHandler, SkipNodes skipNodes, Consumer<Set<NodeAndContext>> visitedNodesHitConsumer, List<EdgeFilter> edgeFilters, SuspendedNodesStack suspendedNodesStack)
     {
         Set<NodeAndContext> visitedNodesHitPaths = new HashSet<>();
         List<NodeAndContext> result = currentNodeAndPaths.stream()
@@ -1697,9 +1680,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         return visitedNodesHandler.peekAndPopulateToEdgeTraversalListener(this.budgetManager.apply(suspendedNodesStack, result));
     }
 
-    private Function<NodeAndContext, Stream<NodeAndContext>> explodeCurrentNodeIntoNextNodes(ForwardFunctionsProvider forwardFunctions,
-                                                                                             VisitedNodesHandler visitedNodesHandler,
-                                                                                             Set<NodeAndContext> visitedNodesHitPaths)
+    private Function<NodeAndContext, Stream<NodeAndContext>> explodeCurrentNodeIntoNextNodes(ForwardFunctionsProvider forwardFunctions, VisitedNodesHandler visitedNodesHandler, Set<NodeAndContext> visitedNodesHitPaths)
     {
         return parentNodeAndContext ->
         {
@@ -1728,7 +1709,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                 Optional<Node> currentNode = ListUtils.optionalLast(nodeAndPath.getFullPath());
                 Optional<Node> previousNode = ListUtils.optionalLast(nodeAndPath.getFullPath(), 1);
 
-                return OptionalUtils.both(previousNode, currentNode)
+                return OptionalUtils.bothElements(previousNode, currentNode)
                                     .flatMap(fromAndTo -> edgesFunction.apply(fromAndTo.getFirst(), fromAndTo.getSecond()))
                                     .map(edge -> PredicateUtils.all(mergedEdgeFilters)
                                                                .test(edge))
@@ -1903,9 +1884,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         private final AtomicLong                   counter = new AtomicLong();
         private final TraversalBagManager          traversalBagManager;
 
-        private BreadthFirstIterator(StartNodeAndForwardFunctionContextTracks startNodeAndForwardFunctionContextTracks, Graph graph,
-                                     List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers, VisitedNodesFilterStrategy visitedNodesFilterStrategy,
-                                     EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager)
+        private BreadthFirstIterator(StartNodeAndForwardFunctionContextTracks startNodeAndForwardFunctionContextTracks, Graph graph, List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers, VisitedNodesFilterStrategy visitedNodesFilterStrategy, EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager)
         {
 
             this.traversalBagManager = new TraversalBagManager().apply(graph, startNodeAndForwardFunctionContextTracks);
@@ -1922,8 +1901,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                                                                             this.traversalBagManager.getPrimaryTraversalStepContext()));
         }
 
-        private void populateStartNodesToEdgeTraversalListener(EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager,
-                                                               List<NodeAndContext> startNodeAndContexts)
+        private void populateStartNodesToEdgeTraversalListener(EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager, List<NodeAndContext> startNodeAndContexts)
         {
             Optional.ofNullable(edgeTraversalListenerManager)
                     .ifPresent(manager -> startNodeAndContexts.stream()
@@ -1937,7 +1915,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             return this.currentRoutesControl.get()
                                             .getRoutes()
                                             .hasRoutes()
-                    || this.traversalBagManager.hasUnprocessedNodes();
+                   || this.traversalBagManager.hasUnprocessedNodes();
         }
 
         @Override
@@ -1955,9 +1933,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             private final TraversalBagManager                 traversalBagManager;
             private final EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager;
 
-            private BreadthFirstSupplier(TraversalBagManager traversalBagManager, AtomicLong counter, SkipNodes skipNodes,
-                                         List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers, VisitedNodesFilterStrategy visitedNodesFilterStrategy,
-                                         EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager)
+            private BreadthFirstSupplier(TraversalBagManager traversalBagManager, AtomicLong counter, SkipNodes skipNodes, List<TraversalRoutesConsumer> alreadyVisitedNodesHitHandlers, VisitedNodesFilterStrategy visitedNodesFilterStrategy, EdgeAndNodeTraversalListenerManager edgeTraversalListenerManager)
             {
                 this.traversalBagManager = traversalBagManager;
                 this.counter = counter;
@@ -2148,13 +2124,13 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
     private static class TraversalBag
     {
-        private final TraversalBagId      traversalBagId      = new TraversalBagId();
+        private final TraversalBagId      traversalBagId         = new TraversalBagId();
         private final TrackStepContext    trackStepContext;
         private final int                 step;
-        private final ExpandedNodesFilter expandedNodesfilter = this.createExpandedNodesFilter();
-        private final SuspendedNodesStack suspendedNodesStack = new SuspendedNodesStack();
+        private final ExpandedNodesFilter expandedNodesfilter    = this.createExpandedNodesFilter();
+        private final SuspendedNodesStack suspendedNodesStack    = new SuspendedNodesStack();
 
-        private List<NodeAndContext> currentNodeAndContexts = new ArrayList<>();
+        private List<NodeAndContext>      currentNodeAndContexts = new ArrayList<>();
 
         public TraversalBag(TrackStepContext trackStepContext, int step)
         {
@@ -2206,8 +2182,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
         public TraversalStepContext getCurrentTraversalStepContext()
         {
-            return new TraversalStepContext()
-            {
+            return new TraversalStepContext() {
                 @Override
                 public int getStep()
                 {
@@ -2248,8 +2223,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
 
         private ExpandedNodesFilter createExpandedNodesFilter()
         {
-            return new ExpandedNodesFilter()
-            {
+            return new ExpandedNodesFilter() {
                 private Set<NodeIdentity> expandedNodes = new HashSet<>();
 
                 @Override
@@ -2350,8 +2324,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         private boolean                      includeFirstVisitedNodeHitRoutes;
         private EdgeAndNodeTraversalListener edgeTraversalListener;
 
-        public VisitedNodesHandler(boolean includeFirstVisitedNodeHitRoutes, Set<NodeIdentity> visitedNodes, ExpandedNodesFilter expandedNodesFilter,
-                                   EdgeAndNodeTraversalListener edgeTraversalListener)
+        public VisitedNodesHandler(boolean includeFirstVisitedNodeHitRoutes, Set<NodeIdentity> visitedNodes, ExpandedNodesFilter expandedNodesFilter, EdgeAndNodeTraversalListener edgeTraversalListener)
         {
             this.includeFirstVisitedNodeHitRoutes = includeFirstVisitedNodeHitRoutes;
             this.visitedNodes = visitedNodes;
@@ -2359,8 +2332,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
             this.edgeTraversalListener = edgeTraversalListener;
         }
 
-        public <R> Stream<R> filterVisitedNodesUpfrontOrExecute(NodeAndContext currentNodeAndContext, Set<NodeAndContext> visitedNodesHitPaths,
-                                                                Function<Predicate<TraversedEdge>, Stream<R>> operation)
+        public <R> Stream<R> filterVisitedNodesUpfrontOrExecute(NodeAndContext currentNodeAndContext, Set<NodeAndContext> visitedNodesHitPaths, Function<Predicate<TraversedEdge>, Stream<R>> operation)
         {
             Node currentNode = currentNodeAndContext.getNode();
             NodeIdentity currentNodeIdentity = currentNode.getIdentity();
@@ -2696,8 +2668,7 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
         private final SkipNodes            skipNodes;
         private final TraversalStepContext traversalStepContext;
 
-        public RoutesControl(Routes routes, SkipNodes skipNodes, long snapshotCounter, LongSupplier currentCounterProvider,
-                             TraversalStepContext traversalStepContext)
+        public RoutesControl(Routes routes, SkipNodes skipNodes, long snapshotCounter, LongSupplier currentCounterProvider, TraversalStepContext traversalStepContext)
         {
             super();
             this.routes = routes;

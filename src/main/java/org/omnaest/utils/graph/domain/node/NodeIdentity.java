@@ -72,8 +72,7 @@ public class NodeIdentity implements Supplier<List<String>>, Comparable<NodeIden
 
     public static NodeIdentityBuilder builder()
     {
-        return new NodeIdentityBuilder()
-        {
+        return new NodeIdentityBuilder() {
             private List<String> ids = new ArrayList<>();
 
             @Override

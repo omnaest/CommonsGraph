@@ -81,8 +81,7 @@ public class GraphBuilderImpl implements GraphBuilder
 
     private NodeDataBuilder createNodeDataBuilder(NodeData nodeData)
     {
-        return new NodeDataBuilder()
-        {
+        return new NodeDataBuilder() {
             @Override
             public NodeDataBuilder put(String key, Object value)
             {
@@ -163,8 +162,7 @@ public class GraphBuilderImpl implements GraphBuilder
     }
 
     @Override
-    public <E> GraphBuilder addElementsWithChildren(Collection<E> elements, Function<E, Collection<E>> elementChildrenExtractor,
-                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper)
+    public <E> GraphBuilder addElementsWithChildren(Collection<E> elements, Function<E, Collection<E>> elementChildrenExtractor, Function<E, NodeIdentity> elementToNodeIdentityMapper)
     {
         return this.addElementsWithChildren(Optional.ofNullable(elements)
                                                     .orElse(Collections.emptyList())
@@ -177,14 +175,12 @@ public class GraphBuilderImpl implements GraphBuilder
     }
 
     @Override
-    public <E> GraphBuilder addElementsWithChildren(Stream<E> elements, Function<E, Stream<E>> elementChildrenExtractor,
-                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper)
+    public <E> GraphBuilder addElementsWithChildren(Stream<E> elements, Function<E, Stream<E>> elementChildrenExtractor, Function<E, NodeIdentity> elementToNodeIdentityMapper)
     {
         return this.addElementsWithChildren(Optional.empty(), elements, elementChildrenExtractor, elementToNodeIdentityMapper);
     }
 
-    public <E> GraphBuilder addElementsWithChildren(Optional<NodeIdentity> parent, Stream<E> elements, Function<E, Stream<E>> elementChildrenExtractor,
-                                                    Function<E, NodeIdentity> elementToNodeIdentityMapper)
+    public <E> GraphBuilder addElementsWithChildren(Optional<NodeIdentity> parent, Stream<E> elements, Function<E, Stream<E>> elementChildrenExtractor, Function<E, NodeIdentity> elementToNodeIdentityMapper)
     {
         if (elements != null && elementToNodeIdentityMapper != null && elementChildrenExtractor != null)
         {

@@ -36,7 +36,7 @@ public class GraphIdentityTokenIndex extends AbstractJSONSerializable
     private Map<Integer, Map<String, Set<NodeIdentity>>> identityTokenIndexToTokenToNodes;
 
     @JsonIgnore
-    private RepositoryProvider repositoryProvider;
+    private RepositoryProvider                           repositoryProvider;
 
     public GraphIdentityTokenIndex(RepositoryProvider repositoryProvider)
     {
@@ -63,7 +63,7 @@ public class GraphIdentityTokenIndex extends AbstractJSONSerializable
                     String token = tokenAndIndex.getFirst();
                     Map<String, Set<NodeIdentity>> tokenIndexRepository = this.identityTokenIndexToTokenToNodes.computeIfAbsent(index,
                                                                                                                                 i -> this.repositoryProvider.createMap("identityTokenIndexToTokenToNodes"
-                                                                                                                                        + i));
+                                                                                                                                                                       + i));
                     Set<NodeIdentity> associatedNodes = tokenIndexRepository.computeIfAbsent(token, t -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
                     associatedNodes.add(nodeIdentity);
                     tokenIndexRepository.put(token, associatedNodes);

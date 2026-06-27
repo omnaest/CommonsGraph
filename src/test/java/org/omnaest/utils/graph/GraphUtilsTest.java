@@ -1598,8 +1598,7 @@ public class GraphUtilsTest
 
     private SupplierConsumer<String> createCache()
     {
-        return new SupplierConsumer<String>()
-        {
+        return new SupplierConsumer<String>() {
             private String json;
 
             @Override

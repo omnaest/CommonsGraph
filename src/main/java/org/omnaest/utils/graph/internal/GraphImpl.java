@@ -196,8 +196,7 @@ public class GraphImpl implements Graph
     {
         GraphDataIndex graphIndex = this.graphIndexAccessor.getGraphDataIndex();
         Graph graph = this;
-        return new GraphSerializer()
-        {
+        return new GraphSerializer() {
             @Override
             public String toJson()
             {
@@ -209,8 +208,7 @@ public class GraphImpl implements Graph
             @Override
             public PlantUmlSerializer toPlantUml()
             {
-                return new PlantUmlSerializer()
-                {
+                return new PlantUmlSerializer() {
                     private Function<Node, String>              labelProvider  = node -> JSONHelper.serialize(node.getIdentity());
                     private Function<Node, Map<String, String>> fieldsProvider = node -> Collections.emptyMap();
 
@@ -277,8 +275,7 @@ public class GraphImpl implements Graph
             public SIFSerializer toSif()
             {
 
-                return new SIFSerializer()
-                {
+                return new SIFSerializer() {
                     private Function<Node, String> labelProvider = node -> JSONHelper.serialize(node.getIdentity());
 
                     private SIFUtils.SIFResource buildRawSifResource()
@@ -366,7 +363,7 @@ public class GraphImpl implements Graph
     public Optional<Edge> findEdge(NodeIdentity from, NodeIdentity to)
     {
         return this.graphIndexAccessor.getEdgeAttributes(from, to)
-                                      .flatMap(attributes -> OptionalUtils.both(this.findNodeById(from), this.findNodeById(to))
+                                      .flatMap(attributes -> OptionalUtils.bothElements(this.findNodeById(from), this.findNodeById(to))
                                                                           .map(fromAndTo -> new EdgeImpl(fromAndTo.getFirst(), fromAndTo.getSecond(),
                                                                                                          attributes)));
     }
@@ -389,8 +386,7 @@ public class GraphImpl implements Graph
     @Override
     public SubGraphBuilder subGraph()
     {
-        return new SubGraphBuilder()
-        {
+        return new SubGraphBuilder() {
             private Optional<Set<NodeIdentity>> excludedNodes = Optional.empty();
             private Optional<Set<NodeIdentity>> includedNodes = Optional.empty();
 
@@ -461,7 +457,7 @@ public class GraphImpl implements Graph
     public Edges edges()
     {
         return new EdgesImpl(this.graphIndexAccessor.getEdges()
-                                                    .map(edge -> OptionalUtils.both(this.findNodeById(edge.getFrom()), this.findNodeById(edge.getTo()))
+                                                    .map(edge -> OptionalUtils.bothElements(this.findNodeById(edge.getFrom()), this.findNodeById(edge.getTo()))
                                                                               .map(fromAndTo -> new EdgeImpl(fromAndTo.getFirst(), fromAndTo.getSecond(),
                                                                                                              edge.getAttributes())))
                                                     .filter(PredicateUtils.filterNonEmptyOptional())
@@ -505,8 +501,7 @@ public class GraphImpl implements Graph
     public GraphTransformer transform()
     {
         Stream<Node> initialNodes = this.stream();
-        return new GraphTransformer()
-        {
+        return new GraphTransformer() {
             private List<Predicate<Node>>              nodeInclusionFilters     = new ArrayList<>();
             private List<Function<Node, NodeIdentity>> nodeMappers              = new ArrayList<>();
             private Set<NodeIdentity>                  additionalNodeIdentities = new HashSet<>();

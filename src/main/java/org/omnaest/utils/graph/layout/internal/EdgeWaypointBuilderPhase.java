@@ -29,6 +29,12 @@ import org.omnaest.utils.graph.layout.domain.LayoutNodeId;
  * path - the first point on the source node's trailing across-axis border, dummy-node centres in between, the last point on
  * the target node's leading across-axis border. If cycle-removal reversed the edge, the list is reversed here so it always
  * reads from the ORIGINAL source to the ORIGINAL target; the reversal is invisible to every caller.
+ * <p>
+ * plan-99 slice S1: before that reversal, edges that belong to a bundle (two or more sharing the same layoutFrom/layoutTo
+ * pair - see {@link EdgeBundleCorridorSupport}) are detoured onto their own lane so their polylines no longer coincide. The
+ * border endpoints are never moved by this - only the corridor interior is offset - so
+ * {@link org.omnaest.utils.graph.layout.domain.LayoutResult#getEdgeWaypoints(LayoutEdgeId)}'s documented contract (first point
+ * on the source border, last point on the target border) holds unchanged.
  *
  * @author omnaest
  */
@@ -42,6 +48,12 @@ final class EdgeWaypointBuilderPhase
     static Map<LayoutEdgeId, List<UV>> apply(LayoutModel model)
     {
         Map<LayoutEdgeId, List<UV>> result = new LinkedHashMap<>();
+        double edgeSeparation = model.getOptions()
+                                     .getEdgeSeparation();
+        double inset = model.getOptions()
+                            .getLayerSeparation()
+                       / 4.0;
+        Map<LayoutEdgeId, Double> laneOffsets = EdgeBundleCorridorSupport.computeLaneOffsets(model.getEdges(), edgeSeparation);
 
         for (WorkEdge edge : model.getEdges())
         {
@@ -63,6 +75,9 @@ final class EdgeWaypointBuilderPhase
                     waypoints.add(new UV(node.centerU(), node.getV() + node.getAcrossSize() / 2.0));
                 }
             }
+
+            double offset = laneOffsets.getOrDefault(edge.getId(), 0.0);
+            waypoints = EdgeBundleCorridorSupport.applyLaneDetour(waypoints, offset, inset);
 
             if (edge.isReversed())
             {

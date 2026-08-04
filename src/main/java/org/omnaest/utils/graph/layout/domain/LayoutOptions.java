@@ -30,13 +30,15 @@ public final class LayoutOptions
     private final double          layerSeparation;
     private final double          nodeSeparation;
     private final double          selfLoopReserve;
+    private final double          edgeSeparation;
 
-    private LayoutOptions(LayoutDirection direction, double layerSeparation, double nodeSeparation, double selfLoopReserve)
+    private LayoutOptions(LayoutDirection direction, double layerSeparation, double nodeSeparation, double selfLoopReserve, double edgeSeparation)
     {
         this.direction = direction;
         this.layerSeparation = layerSeparation;
         this.nodeSeparation = nodeSeparation;
         this.selfLoopReserve = selfLoopReserve;
+        this.edgeSeparation = edgeSeparation;
     }
 
     public LayoutDirection getDirection()
@@ -60,8 +62,21 @@ public final class LayoutOptions
     }
 
     /**
+     * Lateral spacing, in layout units, between the corridors of edges that share the same (layoutFrom, layoutTo) pair after
+     * cycle removal - i.e. a parallel or anti-parallel bundle. {@code 0.0} disables separation entirely and reproduces
+     * today's coincident-corridor polylines exactly; a bundle of size 1 always resolves to zero offset regardless of this
+     * value.
+     *
+     * @return
+     */
+    public double getEdgeSeparation()
+    {
+        return this.edgeSeparation;
+    }
+
+    /**
      * Returns the default {@link LayoutOptions}: {@link LayoutDirection#TOP_TO_BOTTOM}, layerSeparation 60, nodeSeparation 45,
-     * selfLoopReserve 40.
+     * selfLoopReserve 40, edgeSeparation 20.
      *
      * @return
      */
@@ -77,6 +92,7 @@ public final class LayoutOptions
             private double          layerSeparation = 60;
             private double          nodeSeparation  = 45;
             private double          selfLoopReserve = 40;
+            private double          edgeSeparation  = 20;
 
             @Override
             public LayoutOptionsBuilder direction(LayoutDirection direction)
@@ -107,9 +123,16 @@ public final class LayoutOptions
             }
 
             @Override
+            public LayoutOptionsBuilder edgeSeparation(double edgeSeparation)
+            {
+                this.edgeSeparation = edgeSeparation;
+                return this;
+            }
+
+            @Override
             public LayoutOptions build()
             {
-                return new LayoutOptions(this.direction, this.layerSeparation, this.nodeSeparation, this.selfLoopReserve);
+                return new LayoutOptions(this.direction, this.layerSeparation, this.nodeSeparation, this.selfLoopReserve, this.edgeSeparation);
             }
         };
     }
@@ -118,7 +141,7 @@ public final class LayoutOptions
     public String toString()
     {
         return "LayoutOptions [direction=" + this.direction + ", layerSeparation=" + this.layerSeparation + ", nodeSeparation=" + this.nodeSeparation
-               + ", selfLoopReserve=" + this.selfLoopReserve + "]";
+               + ", selfLoopReserve=" + this.selfLoopReserve + ", edgeSeparation=" + this.edgeSeparation + "]";
     }
 
     @Override
@@ -130,9 +153,11 @@ public final class LayoutOptions
         long bitsLayerSeparation = Double.doubleToLongBits(this.layerSeparation);
         long bitsNodeSeparation = Double.doubleToLongBits(this.nodeSeparation);
         long bitsSelfLoopReserve = Double.doubleToLongBits(this.selfLoopReserve);
+        long bitsEdgeSeparation = Double.doubleToLongBits(this.edgeSeparation);
         result = prime * result + (int) (bitsLayerSeparation ^ (bitsLayerSeparation >>> 32));
         result = prime * result + (int) (bitsNodeSeparation ^ (bitsNodeSeparation >>> 32));
         result = prime * result + (int) (bitsSelfLoopReserve ^ (bitsSelfLoopReserve >>> 32));
+        result = prime * result + (int) (bitsEdgeSeparation ^ (bitsEdgeSeparation >>> 32));
         return result;
     }
 
@@ -150,7 +175,8 @@ public final class LayoutOptions
         LayoutOptions other = (LayoutOptions) obj;
         return this.direction == other.direction && Double.doubleToLongBits(this.layerSeparation) == Double.doubleToLongBits(other.layerSeparation)
                && Double.doubleToLongBits(this.nodeSeparation) == Double.doubleToLongBits(other.nodeSeparation)
-               && Double.doubleToLongBits(this.selfLoopReserve) == Double.doubleToLongBits(other.selfLoopReserve);
+               && Double.doubleToLongBits(this.selfLoopReserve) == Double.doubleToLongBits(other.selfLoopReserve)
+               && Double.doubleToLongBits(this.edgeSeparation) == Double.doubleToLongBits(other.edgeSeparation);
     }
 
     /**
@@ -168,6 +194,8 @@ public final class LayoutOptions
         public LayoutOptionsBuilder nodeSeparation(double nodeSeparation);
 
         public LayoutOptionsBuilder selfLoopReserve(double selfLoopReserve);
+
+        public LayoutOptionsBuilder edgeSeparation(double edgeSeparation);
 
         public LayoutOptions build();
     }

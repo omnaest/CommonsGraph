@@ -16,9 +16,7 @@
 package org.omnaest.utils.graph.layout.internal;
 
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Set;
 
 import org.omnaest.utils.graph.layout.domain.LayoutDirection;
 import org.omnaest.utils.graph.layout.domain.LayoutEdge;
@@ -30,6 +28,11 @@ import org.omnaest.utils.graph.layout.domain.LayoutOptions;
 /**
  * Builds the mutable {@link LayoutModel} working copy from the immutable input {@link LayoutGraph} (algorithm step 1: also
  * splits off self-loop edges here, before they can reach cycle-removal or crossing-minimization).
+ * <p>
+ * A node's along-axis slot reservation for its self-loop detour scales with how many self-loops it carries:
+ * {@code selfLoopReserve + (count - 1) * edgeSeparation} - one loop reproduces the original flat {@code selfLoopReserve}
+ * reservation exactly (byte-identical node placement for the N==1 case), while N loops reserve enough along-axis space for
+ * the outermost loop's detour depth, see {@link SelfLoopRoutingPhase}.
  *
  * @author omnaest
  */
@@ -45,7 +48,7 @@ final class BuildWorkGraphPhase
         LayoutModel model = new LayoutModel(options);
         boolean topToBottom = options.getDirection() == LayoutDirection.TOP_TO_BOTTOM;
 
-        Set<LayoutNodeId> selfLoopNodeIds = new LinkedHashSet<>();
+        Map<LayoutNodeId, Integer> selfLoopCounts = new LinkedHashMap<>();
         Map<LayoutNodeId, Integer> degree = new LinkedHashMap<>();
         for (LayoutNode node : graph.getNodes())
         {
@@ -56,7 +59,7 @@ final class BuildWorkGraphPhase
             if (edge.getFrom()
                     .equals(edge.getTo()))
             {
-                selfLoopNodeIds.add(edge.getFrom());
+                selfLoopCounts.merge(edge.getFrom(), 1, Integer::sum);
             }
             else
             {
@@ -73,7 +76,8 @@ final class BuildWorkGraphPhase
                                 .getHeight();
             double alongSize = topToBottom ? width : height;
             double acrossSize = topToBottom ? height : width;
-            double selfLoopReserve = selfLoopNodeIds.contains(node.getId()) ? options.getSelfLoopReserve() : 0.0;
+            int selfLoopCount = selfLoopCounts.getOrDefault(node.getId(), 0);
+            double selfLoopReserve = selfLoopCount > 0 ? options.getSelfLoopReserve() + (selfLoopCount - 1) * options.getEdgeSeparation() : 0.0;
             int nodeDegree = degree.getOrDefault(node.getId(), 0);
             model.addNode(new WorkNode(node.getId(), false, alongSize, acrossSize, width, height, selfLoopReserve, nodeDegree));
         }

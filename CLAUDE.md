@@ -21,7 +21,7 @@ Static facade `GraphUtils` creates a `GraphBuilder`. The `Graph` interface (exte
 | `graph.domain.edge` | `Edge`, `Edges`, `TraversedEdge`, `TraversedEdges` |
 | `graph.domain.node` | `Node`, `Nodes`, `NodeIdentity` |
 | `graph.domain.traversal` | `Traversal`, `TraversalRoutes`, `Route`, `Routes`, `RouteAndTraversalControl` |
-| `graph.domain.traversal.hierarchy` | `Hierarchy`, `HierarchicalNode` |
+| `graph.domain.traversal.hierarchy` | `Hierarchy`, `HierarchicalNode`, `ColumnizedHierarchyNode` |
 | `graph.internal` | `GraphImpl`, `GraphBuilderImpl`, `GraphResolver` |
 | `graph.internal.data` | Index data structures |
 | `graph.internal.router` | `GraphRouter`, routing strategies (BFS) |

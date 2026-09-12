@@ -91,6 +91,7 @@ import org.omnaest.utils.graph.domain.traversal.Traversal.VisitedNodesStatistic;
 import org.omnaest.utils.graph.domain.traversal.TraversalRoutes;
 import org.omnaest.utils.graph.domain.traversal.TraversalRoutesConsumer;
 import org.omnaest.utils.graph.domain.traversal.TraversedEdge;
+import org.omnaest.utils.graph.domain.traversal.hierarchy.ColumnizedHierarchyNode;
 import org.omnaest.utils.graph.domain.traversal.hierarchy.DataBuilder;
 import org.omnaest.utils.graph.domain.traversal.hierarchy.HierarchicalNode;
 import org.omnaest.utils.graph.domain.traversal.hierarchy.Hierarchy;
@@ -746,18 +747,6 @@ public class BreadthFirstRoutingStrategy implements RoutingStrategy
                 this.consumers.add(graphConsumer);
             }
         }
-    }
-
-    public static interface ColumnizedHierarchyNode extends Supplier<HierarchicalNode>
-    {
-        /**
-         * Returns the column index = 0,1,2,...
-         * 
-         * @return
-         */
-        public int getColumnIndex();
-
-        public String asJsonWithData(BiConsumer<HierarchicalNode, DataBuilder> nodeAndDataBuilderConsumer);
     }
 
     private static class StartNodeAndForwardFunctionContext

@@ -3,7 +3,6 @@ package org.omnaest.utils.graph.domain.traversal.hierarchy;
 import java.util.function.BiConsumer;
 import java.util.stream.Stream;
 
-import org.omnaest.utils.graph.internal.router.strategy.BreadthFirstRoutingStrategy.ColumnizedHierarchyNode;
 import org.omnaest.utils.stream.Streamable;
 
 /**

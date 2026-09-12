@@ -11,6 +11,13 @@
 	<artifactId>CommonsGraph</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 
+	<properties>
+		<!-- Publishing opt-in: CommonsParent defaults both to true (fail-closed). This module is
+		     already published to the Central Portal snapshot repository, so it opts back in. -->
+		<maven.deploy.skip>false</maven.deploy.skip>
+		<central.skipPublishing>false</central.skipPublishing>
+	</properties>
+
 	<licenses>
 		<license>
 			<name>The Apache Software License, Version 2.0</name>

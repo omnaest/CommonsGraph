@@ -16,6 +16,13 @@ import org.omnaest.utils.style.sourcetext.SourceGuard;
  * <p>
  * Only the shipped {@code SUBTREE} readings are asserted here. The strict {@code DIRECT_PARENT} reading is a
  * plan-193 Cliff 3 measurement mode, not a permanent check, and is exercised separately by a temporary probe.
+ * <p>
+ * plan-216: this class now runs the full enforced check surface (14 {@code ArchRule} factories plus 2
+ * {@code SourceGuard} checks), bringing it up from the smaller subset it adopted with. Deliberately excluded, both
+ * on documented measurement-only grounds rather than by omission: {@code StyleProfile}'s
+ * {@code internalPackagesAreAccessedOnlyFromTheirDirectParentPackage()} and {@code SourceGuard}'s
+ * {@code noInternalReferencesFromOutsideTheirDirectParentPackage()} - the strict {@code DIRECT_PARENT} readings
+ * named above.
  */
 class PackageStructureTest
 {
@@ -75,6 +82,48 @@ class PackageStructureTest
     void noInternalTypeOnAPublicApiSurface()
     {
         PROFILE.noInternalTypeOnAPublicApiSurface()
+               .check(PROFILE.mainClasses());
+    }
+
+    @Test
+    void boundedContextsAreDiscovered()
+    {
+        PROFILE.boundedContextsAreDiscovered()
+               .check(PROFILE.mainClasses());
+    }
+
+    @Test
+    void noContextDependsOnAnAdapter()
+    {
+        PROFILE.noContextDependsOnAnAdapter()
+               .check(PROFILE.mainClasses());
+    }
+
+    @Test
+    void adapterWireTypesLiveInTheirChannelDomain()
+    {
+        PROFILE.adapterWireTypesLiveInTheirChannelDomain()
+               .check(PROFILE.mainClasses());
+    }
+
+    @Test
+    void sharedTypesAreUsedByAtLeastTwoContexts()
+    {
+        PROFILE.sharedTypesAreUsedByAtLeastTwoContexts()
+               .check(PROFILE.mainClasses());
+    }
+
+    @Test
+    void utilsPackagesDoNotReachIntoDomain()
+    {
+        PROFILE.utilsPackagesDoNotReachIntoDomain()
+               .check(PROFILE.mainClasses());
+    }
+
+    @Test
+    void utilsPackagesDoNotDuplicateCommonsTypes()
+    {
+        PROFILE.utilsPackagesDoNotDuplicateCommonsTypes()
                .check(PROFILE.mainClasses());
     }
 
